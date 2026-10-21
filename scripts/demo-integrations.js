@@ -21,6 +21,39 @@ const CREDS = {
   greenboneToken: "demo-greenbone-bridge-token"
 };
 const DEMO_TASKS = [];
+
+// Fake scan results for the demo Greenbone bridge. Every name carries "(demo)". A task whose name contains
+// "Retest" no longer reports the two quick-to-fix items, so the retest-verification flow can be tried end to end.
+const DEMO_VULNS = [
+  ["1.3.6.1.4.1.25623.1.0.117721", "Apache HTTP Server 2.4.49 Path Traversal (demo)", "80/tcp", 9.8, "High", ["CVE-2021-41773", "CVE-2021-42013"], "Update to Apache HTTP Server 2.4.51 or later.", true],
+  ["1.3.6.1.4.1.25623.1.0.105611", "SSH Weak Encryption Algorithms Supported (demo)", "22/tcp", 5.3, "Medium", [], "Disable the weak ciphers in sshd_config.", false],
+  ["1.3.6.1.4.1.25623.1.0.117274", "TLS 1.0 Protocol Detection (demo)", "443/tcp", 4.3, "Medium", ["CVE-2011-3389"], "Disable TLS 1.0 and 1.1.", true],
+  ["1.3.6.1.4.1.25623.1.0.103674", "Operating System End Of Life Detection (demo)", "general/tcp", 10.0, "High", [], "Upgrade to a supported operating system.", false],
+  ["1.3.6.1.4.1.25623.1.0.103190", "ICMP Timestamp Reply Information Disclosure (demo)", "general/icmp", 2.1, "Low", ["CVE-1999-0524"], "Filter ICMP timestamp requests.", false],
+  ["1.3.6.1.4.1.25623.1.0.10330", "Services Detection (demo)", "80/tcp", 0.0, "Log", [], "", false]
+];
+const demoHosts = (spec) => {
+  const base = String(spec).split("/")[0];
+  if (String(spec).includes("/") && !String(spec).endsWith("/32")) { const [a, b, c] = base.split("."); return [`${a}.${b}.${c}.10`, `${a}.${b}.${c}.11`]; }
+  return [base];
+};
+const demoFindings = () => {
+  const out = [];
+  [...DEMO_TASKS].reverse().forEach((task, reportIndex) => {          // newest report first
+    const isRetest = /retest/i.test(task.targetName);
+    for (const host of demoHosts(task.target)) {
+      for (const [oid, name, port, severity, threat, cves, solution, fixedByRetest] of DEMO_VULNS) {
+        if (isRetest && fixedByRetest) continue;
+        out.push({
+          reportId: `rep-${task.taskId}`, taskName: task.targetName, host, port, name, oid, cves, severity, threat,
+          description: `${name} on ${host}. Demo data: no scan was run.`, solution,
+          creationTime: new Date().toISOString(), resultId: `${task.taskId}-${host}-${oid}`, reportIndex
+        });
+      }
+    }
+  });
+  return out;
+};
 // Real Wazuh JWTs can be long (many RBAC roles). A long token here guards against any truncation of the raw token.
 const WAZUH_JWT = "eyJ-demo." + "A".repeat(880) + ".sig";
 
@@ -191,6 +224,9 @@ function handle(req, res, body) {
         targets: DEMO_TASKS.map((t) => ({ id: t.targetId, name: t.targetName, hosts: t.target, comment: "" })),
         tasks: [...DEMO_TASKS].reverse().map((t) => ({ id: t.taskId, name: t.targetName, status: t.status, progress: String(t.progress), target: t.targetName, lastReportId: "" }))
       });
+    }
+    if (url === "/greenbone/v1/findings") {
+      return json(200, { findings: demoFindings(), truncated: false, source: "Demo Greenbone bridge (fake)", retrievedAt: new Date().toISOString() });
     }
     if (url === "/greenbone/v1/assessments" && req.method === "POST") {
       let data = {};

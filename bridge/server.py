@@ -8,6 +8,7 @@ allow-list owned by whoever runs Greenbone, in addition to PrimeSEC's approved s
 
 Only scan systems you are explicitly authorised to assess.
 """
+import datetime
 import hmac
 import ipaddress
 import json
@@ -16,6 +17,7 @@ import re
 import shlex
 import subprocess
 import sys
+import traceback
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from xml.etree import ElementTree as ET
@@ -35,6 +37,8 @@ SCANNER_ID = os.getenv("GREENBONE_SCANNER_ID", "08b69003-5fc2-4037-a479-93b44021
 TIMEOUT = int(os.getenv("GREENBONE_COMMAND_TIMEOUT", "45"))
 ALLOWED_RANGES = [r.strip() for r in os.getenv("GREENBONE_ALLOWED_RANGES", "").split(",") if r.strip()]
 MIN_TOKEN_LENGTH = 32
+REPORT_ROWS = int(os.getenv("GREENBONE_REPORT_ROWS", "25"))      # how many recent reports a sync reads
+MAX_FINDINGS = int(os.getenv("GREENBONE_MAX_FINDINGS", "2000"))  # hard cap per sync; a capped import says so
 
 # Never scannable, regardless of any approval: the scanner host itself, link-local (cloud metadata), multicast, reserved.
 RESERVED = [ipaddress.ip_network(n) for n in ("0.0.0.0/8", "127.0.0.0/8", "169.254.0.0/16", "224.0.0.0/4", "240.0.0.0/4")]
@@ -42,6 +46,12 @@ RESERVED = [ipaddress.ip_network(n) for n in ("0.0.0.0/8", "127.0.0.0/8", "169.2
 
 class BridgeError(Exception):
     pass
+
+
+def log_unexpected(where):
+    """Unexpected errors go to the bridge's own stderr (never to the caller). Tracebacks hold no credentials:
+    the gvm-cli command line, which does, is only ever built inside subprocess.run and its errors are caught."""
+    print(f"ERROR in {where}:\n{traceback.format_exc()}", file=sys.stderr, flush=True)
 
 
 def gvm_command(xml):
@@ -112,6 +122,76 @@ def get_overview():
         "targets": parse_targets(targets),
         "tasks": parse_tasks(tasks),
         "message": "Connected to Greenbone GMP.",
+    }
+
+
+def parse_findings(root, max_findings=None):
+    """Normalises get_reports(details=1) into flat findings. Returns (findings, truncated).
+
+    A GMP report is wrapped in an outer <report> that contains an inner <report> holding <results>; only the
+    one that directly holds <results> is read, so nothing is counted twice. CVEs come from
+    nvt/refs/ref[@type='cve'] (current GMP) and, for older releases, the nvt/cve text.
+    """
+    limit = MAX_FINDINGS if max_findings is None else max_findings
+    findings, seen = [], set()
+    outers = root.findall("report") or list(root.iter("report"))
+    for report_index, outer in enumerate(outers):  # reports arrive newest first (sort-reverse=creation_time)
+        inner = outer.find("report") if outer.find("report") is not None else outer
+        results = inner.find("results")
+        if results is None:
+            continue
+        report_id = inner.attrib.get("id", "") or outer.attrib.get("id", "")
+        task_name = text(outer, "task/name") or text(inner, "task/name")
+        for result in results.findall("result"):
+            result_id = result.attrib.get("id", "")
+            if result_id:
+                if result_id in seen:
+                    continue
+                seen.add(result_id)
+            nvt = result.find("nvt")
+            cves = set()
+            if nvt is not None:
+                for ref in nvt.findall("refs/ref"):
+                    if ref.attrib.get("type", "").lower() == "cve" and ref.attrib.get("id"):
+                        cves.add(ref.attrib["id"].strip())
+                for part in text(nvt, "cve").split(","):
+                    part = part.strip()
+                    if part and part.upper() != "NOCVE":
+                        cves.add(part)
+            try:
+                severity = float(text(result, "severity", "0"))
+            except ValueError:
+                severity = 0.0
+            if len(findings) >= limit:
+                return findings, True
+            findings.append({
+                "reportId": report_id,
+                "taskName": task_name,
+                "host": text(result, "host"),
+                "port": text(result, "port"),
+                "name": (text(nvt, "name") if nvt is not None else "") or text(result, "name") or "Unnamed vulnerability result",
+                "oid": nvt.attrib.get("oid", "") if nvt is not None else "",
+                "cves": sorted(cves),
+                "severity": severity,
+                "threat": text(result, "threat", "Log"),
+                "description": text(result, "description")[:6000],
+                "solution": text(nvt, "solution")[:3000] if nvt is not None else "",
+                "creationTime": text(result, "creation_time") or text(result, "modification_time"),
+                "resultId": result_id,
+                "reportIndex": report_index,
+            })
+    return findings, False
+
+
+def get_findings():
+    # ignore_pagination: read every result of each report, not just the first page (checked against the GMP docs, not a live Greenbone)
+    reports = cmd(f'<get_reports filter="rows={REPORT_ROWS} sort-reverse=creation_time" details="1" ignore_pagination="1"/>')
+    findings, truncated = parse_findings(reports)
+    return {
+        "findings": findings,
+        "truncated": truncated,
+        "source": "Greenbone GMP",
+        "retrievedAt": datetime.datetime.now(datetime.timezone.utc).isoformat(),
     }
 
 
@@ -217,10 +297,13 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if path == "/v1/overview":
                 return self.send_json(200, get_overview())
+            if path == "/v1/findings":
+                return self.send_json(200, get_findings())
             return self.send_json(404, {"error": "Not found"})
         except BridgeError as e:
             return self.send_json(502, {"error": str(e)})
         except Exception:
+            log_unexpected(f"{self.command} {self.path}")
             return self.send_json(500, {"error": "Unexpected bridge error. Check bridge logs."})
 
     def do_POST(self):
@@ -243,6 +326,7 @@ class Handler(BaseHTTPRequestHandler):
             code = 400 if str(e).startswith(("Target ", "Only IPv4", "For safety", "That range")) else 502
             return self.send_json(code, {"error": str(e)})
         except Exception:
+            log_unexpected(f"{self.command} {self.path}")
             return self.send_json(500, {"error": "Unexpected bridge error. Check bridge logs."})
 
 

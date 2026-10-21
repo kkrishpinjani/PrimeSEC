@@ -31,17 +31,25 @@ export type VaptAssessmentEvent = Base & {
   /** Why a launch was refused or failed. */
   reason?: string;
   scopeId?: string;
+  /** Set when the scan is a retest of a finding. */
+  findingId?: string;
   assessment?: { taskId: string; targetId: string; targetName: string; status: string };
 };
 
-export type AuditEvent = InvestigationEvent | VaptScopeEvent | VaptAssessmentEvent;
+/** Findings workflow. Notes are never copied into the audit log: only which fields changed. */
+export type VaptFindingEvent = Base & (
+  | { action: "vapt_findings_synchronized"; imported: number; updated: number; missing: number; total: number; truncated: boolean }
+  | { action: "vapt_finding_updated"; finding: { id: string; host: string; port: string; name: string; cves: string[] }; changes: string[]; status: { from: string; to: string } }
+  | { action: "vapt_finding_retest_requested"; finding: { id: string; host: string; port: string; name: string }; target: string; taskId: string | null }
+);
+
+export type AuditEvent = InvestigationEvent | VaptScopeEvent | VaptAssessmentEvent | VaptFindingEvent;
 export type AuditAction = AuditEvent["action"];
 
 /** Input for writeAuditEvent: everything except the fields the writer assigns. */
-export type AuditInput =
-  | Omit<InvestigationEvent, "eventId" | "timestamp">
-  | Omit<VaptScopeEvent, "eventId" | "timestamp">
-  | Omit<VaptAssessmentEvent, "eventId" | "timestamp">;
+// Distributes over the union so each event keeps its own shape (a plain Omit on a union would collapse it).
+type Unwrap<T> = T extends unknown ? Omit<T, "eventId" | "timestamp"> : never;
+export type AuditInput = Unwrap<AuditEvent>;
 
 const auditPath = () => path.join(process.cwd(), "data", "audit-events.jsonl");
 

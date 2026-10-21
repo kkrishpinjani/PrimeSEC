@@ -14,6 +14,7 @@ Stack: Next.js 15 (pages router), React 18, TypeScript, NextAuth 4 (Keycloak OID
 | **Dashboard** (`/dashboard`) | Full-screen SOC view: globe of geolocated alert sources, hourly alert volume, severity counts, a documented threat score, Threat Intel, Vulnerabilities and Investigations tabs. Live per section when a platform is connected; otherwise clearly labelled sample data. |
 | **Investigations** | An **Investigate** button on each live Wazuh alert: re-reads the alert from Wazuh, looks up its IPs/domains/hashes in OpenCTI, shows potential matches for analyst review, and writes an audit event. Read-only: it never blocks or remediates anything. |
 | **VAPT workspace** (`/vapt`) | `SOC_Admin` approves a scope with a written authorization reference and an expiry; scans can start only inside it. Every approval, revocation, launch and refusal is audited. |
+| **Findings** (`/vapt/findings`) | Greenbone results imported and de-duplicated, with remediation status, owner and notes, a retest request, and a "not in latest scan" flag that helps verify fixes. It records work; it never changes a host. |
 | **Landing page** (`/`) | Public page with the globe. |
 | **Health** (`/api/health`) | Local health check. |
 
@@ -80,7 +81,17 @@ What becomes real once connected:
 - Targets: IPv4, `/24` or narrower, no host bits set. Loopback, link-local (cloud metadata), multicast and reserved ranges can never be scanned. Public ranges need an explicit acknowledgement. Scopes can be revoked at any time. Launches are limited to 5 per 10 minutes per user.
 - Real Greenbone: deploy Greenbone Community Edition from its **current** official guide (https://greenbone.github.io/docs/latest/22.4/container/), wait for the feeds to sync, give the bridge's service account (only) access to the gvmd socket, then `cd bridge && cp .env.example .env` and set a random `GREENBONE_BRIDGE_TOKEN` (32+ chars), the socket path, credentials (prefer `GVM_CLI_CONFIG`, a mode-0600 gvm-tools config file), your scan-config / port-list / scanner UUIDs and optionally `GREENBONE_ALLOWED_RANGES` (a second allow-list you control). Run `./run-bridge.sh`, then set `GREENBONE_BRIDGE_URL` and the same token in PrimeSEC's `.env`.
 - `bridge/fake_gvm_cli.py` is a **test double** (not Greenbone): `GVM_CLI_PATH="python bridge/fake_gvm_cli.py"`.
-- This build launches tasks and shows their status. Detailed findings, remediation and retest are not built yet.
+- `bridge/fake_gvm_cli.py` also returns realistic reports for the findings workflow.
+
+### Findings, remediation and retest (Day 5)
+`/vapt/findings` imports recent Greenbone report results (**Sync Greenbone findings**, `SOC_Analyst`/`SOC_Admin`, a POST with origin check and rate limit) and keeps one record per vulnerability per host and port. Evidence is refreshed on every sync while **status, owner, notes and retest data always survive**.
+
+- **Remediation:** status (`Open`, `In Progress`, `Resolved`, `Retest Required`, `Closed`), owner and notes. A finding can be closed only after a retest was requested for it, or by a `SOC_Admin` who writes a justification in the notes. Concurrent edits are detected (409) instead of overwritten.
+- **Retest:** a request for a new authorized scan of the finding's host. It goes through the same scope, audit-before-launch and rate-limit path as any scan, so a host outside an approved scope is refused. Nothing is fixed or changed on the host.
+- **Verifying a fix:** for each host only its most recent report counts as current. A finding that appeared in an older report but is absent from the host's latest one is flagged **Not in latest scan**. That is a hint to review the new report, then resolve; nothing is ever closed automatically.
+- **Audit:** sync, edits (which fields changed, never the note text) and retests are audited. Findings live in `data/vapt-findings.json` (git-ignored), serialised within one server process.
+- Try it with `npm run demo:integrations`: approve a scope, scan it, sync, then request a retest and sync again. The demo retest scan no longer reports the Apache and TLS 1.0 items, so those two get flagged.
+- Checklist and limits: [docs/day5-checklist.md](docs/day5-checklist.md).
 
 ### Wazuh single sign-on
 Wazuh uses SAML; PrimeSEC uses OIDC. They can share the Keycloak realm as separate clients. Set `WAZUH_DASHBOARD_URL` for the header link, then follow the version-matched guide: https://documentation.wazuh.com/current/user-manual/user-administration/single-sign-on/keycloak.html (it cannot be pre-configured without your Wazuh version, URL and certificates).
@@ -97,9 +108,10 @@ Wazuh uses SAML; PrimeSEC uses OIDC. They can share the Keycloak realm as separa
 ## Tests
 
 ```powershell
-npm test            # all unit tests (Node 22.6+): scan-scope rules (40), audit reader + observable extraction (33)
+npm test            # all unit tests (Node 22.6+): scan-scope rules (40), audit reader + observable extraction (33), findings (71)
 npm run test:vapt   # only the scan-scope safety rules
 npm run test:lib    # only the audit reader and the observable extractor
+npm run test:findings  # only findings normalization, sync, remediation and the close rule
 npx tsc --noEmit
 npm run lint
 npm run build       # do not run while `npm run dev` is running: it corrupts the dev cache
@@ -112,7 +124,7 @@ npm run build       # do not run while `npm run dev` is running: it corrupts the
 - The realm JSON contains a local-only client secret (`primesoc-local-dev-secret-change-me`). Rotate it, and every default password, before any shared deployment.
 - Roles are read once at sign-in and kept for the 8-hour session, so revoking a role in Keycloak takes effect after the user signs out. There is no refresh-token rotation yet.
 - `NEXTAUTH_SECRET` is validated at request time: the app refuses to authenticate with a missing or placeholder secret.
-- Audit events (`data/audit-events.jsonl`) and scan scopes (`data/vapt-scopes.json`) are local files in the git-ignored `data/` folder. They are not tamper-proof or replicated; use a durable, access-controlled store before production.
+- Audit events (`data/audit-events.jsonl`), scan scopes (`data/vapt-scopes.json`) and findings (`data/vapt-findings.json`) are local files in the git-ignored `data/` folder. They are not tamper-proof or replicated; use a durable, access-controlled store before production.
 - Rate limiting and scope-file write serialisation are per server process. Run a single Next.js process, or move scopes, audit and rate limits into a database first.
 - Errors are logged on the server (`[primesec] ...` lines, never request bodies or credentials) and returned to the browser as generic messages.
 - Never commit `.env` or `bridge/.env`. Use HTTPS and stable hostnames outside local development.

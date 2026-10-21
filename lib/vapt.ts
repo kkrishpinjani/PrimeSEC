@@ -8,6 +8,7 @@
  */
 import { promises as fs } from "fs";
 import path from "path";
+import type { RawFinding } from "./findings";
 
 export type VaptScope = {
   id: string;
@@ -257,4 +258,19 @@ export async function getVaptOverview(): Promise<VaptOverview> {
 export async function launchVaptAssessment(input: { target: string; name?: unknown }): Promise<VaptAssessment> {
   const name = String(input.name || "PrimeSEC assessment").slice(0, 80);
   return bridgeFetch("/v1/assessments", { method: "POST", body: JSON.stringify({ target: normalizeTarget(input.target), name }) }, launchTimeout());
+}
+
+// Reading every result of the recent reports can take far longer than a status read.
+const syncTimeout = () => Number(process.env.GREENBONE_SYNC_TIMEOUT_MS || 60000);
+
+export type BridgeFindings = { findings: RawFinding[]; truncated: boolean; retrievedAt: string };
+
+/** Recent report results from Greenbone via the bridge (read-only). */
+export async function getBridgeFindings(): Promise<BridgeFindings> {
+  const data = await bridgeFetch("/v1/findings", {}, syncTimeout());
+  return {
+    findings: Array.isArray(data.findings) ? data.findings : [],
+    truncated: Boolean(data.truncated),
+    retrievedAt: typeof data.retrievedAt === "string" ? data.retrievedAt : new Date().toISOString()
+  };
 }

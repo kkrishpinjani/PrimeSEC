@@ -15,6 +15,7 @@ Last verified: 2026-10-21 (including a real Keycloak run and an independent code
 | 2 Wazuh + OpenCTI | Built, verified on demo data | **No.** Never run against a real Wazuh or OpenCTI. |
 | 3 Investigation | Built, verified on demo data | **No.** Same dependency on real Wazuh/OpenCTI. |
 | 4 Greenbone VAPT | Built, verified on a test double | **No.** Never run against a real Greenbone. |
+| 5 Findings, remediation, retest | Built, verified on a test double and demo bridge | **No.** Never run against a real Greenbone report. |
 
 Everything that can be finished and verified without your platforms is finished.
 
@@ -116,6 +117,27 @@ Everything that can be finished and verified without your platforms is finished.
 - [ ] `gvm-cli` flags and GMP responses confirmed against your Greenbone version.
 - [ ] A real task appears in Greenbone and in the PrimeSEC task list.
 - [ ] Day 5 scope (not built): detailed findings, remediation workflow, retest.
+
+---
+
+---
+
+## Day 5: Greenbone findings, remediation and retest
+
+Full detail: [day5-checklist.md](day5-checklist.md). It records work; it never changes a target.
+
+- [x] Findings import (POST, origin-checked, role-gated, rate-limited), normalized and de-duplicated with stable `sha256(host|port|oid)` ids (100,000 findings, zero collisions; a renamed NVT keeps its history).
+- [x] Bridge parser reads each GMP report once (the original doubled every result), supports both CVE shapes, and reports truncation instead of silently capping.
+- [x] Remediation status, owner and notes. A status-only update no longer erases owner and notes (the original did). Edit conflicts (409) instead of lost updates; 40 concurrent edits all kept.
+- [x] Close rule: only after a retest was requested, or by a SOC_Admin with a written justification.
+- [x] Retest goes through the same scope, audit-before-launch and rate-limit path as every scan (the original skipped these guards and audited after the fact).
+- [x] Per-host "latest report wins": a retest that no longer finds a vulnerability flags it **Not in latest scan**, never auto-closes it. Verified end to end in a real browser.
+- [x] `/vapt/findings` UI (summary, multi-word search, filters, evidence, retest, paging). Sync, edit, retest, verify exercised in a real browser.
+- [x] Shared `startAuthorizedScan()` now used by both the scan and retest routes; all earlier regression suites still pass, plus 55 new API checks and 71 new unit tests (144 in total).
+- [x] The bridge now logs unexpected errors (with a traceback, never credentials). That found a real bug in the new parser on first use.
+- [~] Verified against the `gvm-cli` test double and the demo bridge only.
+- [ ] Greenbone report layout (`details`, `ignore_pagination`, `nvt/refs`, newest-first order) and timeouts confirmed against your Greenbone version (needs your Greenbone).
+- [ ] Day 6 scope, if any (not defined).
 
 ---
 

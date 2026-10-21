@@ -33,6 +33,9 @@ function describe(e: AuditEvent): { label: string; detail: string; tone: "ok" | 
     case "vapt_assessment_started": return { label: "Scan started", detail: e.target, tone: "ok" };
     case "vapt_assessment_failed": return { label: "Scan failed", detail: `${e.target}: ${e.reason ?? "error"}`, tone: "bad" };
     case "vapt_assessment_denied": return { label: "Scan refused", detail: `${e.target}: ${e.reason ?? "not in scope"}`, tone: "bad" };
+    case "vapt_findings_synchronized": return { label: "Findings synced", detail: `${e.imported} new, ${e.updated} updated${e.missing ? `, ${e.missing} not in latest scan` : ""}${e.truncated ? " (truncated)" : ""}`, tone: e.truncated ? "warn" : "ok" };
+    case "vapt_finding_updated": return { label: "Finding updated", detail: `${e.finding.name} on ${e.finding.host}: ${e.changes.join(", ") || "no change"}${e.status.from !== e.status.to ? ` (${e.status.from} → ${e.status.to})` : ""}`, tone: "ok" };
+    case "vapt_finding_retest_requested": return { label: "Retest requested", detail: `${e.finding.name} on ${e.target}`, tone: "ok" };
     default: return { label: "Event", detail: "", tone: "ok" };
   }
 }
@@ -106,6 +109,7 @@ export default function VaptWorkspace({ user, roles }: { user: { name?: string |
         <span className="pv-logo"><LogoMark size={18} /></span>
         <Link href="/dashboard" className="pv-chip">← Dashboard</Link>
         <span className="pv-chip">Vulnerability assessment (VAPT)</span>
+        <Link href="/vapt/findings" className="pv-chip pv-chip-link">Findings &amp; remediation →</Link>
         <div className="pv-actions">
           <button className="pv-btn" onClick={() => void load()} disabled={loading}>{loading ? "Checking…" : "↻ Refresh"}</button>
           <button className="pv-btn" onClick={() => void fullSignOut()}>Sign out</button>
