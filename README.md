@@ -33,7 +33,7 @@ npm run dev
 | App | http://localhost:3010 |
 | Keycloak admin | http://localhost:8080/admin (credentials in `.env`) |
 | Health | http://localhost:3010/api/health |
-| Backend | port 8010 (reserved; nothing calls it yet) |
+| Your backend | port 8010: the AgenticOS FastAPI backend (`new project langdiify/backend`, docs at `/docs`). PrimeSEC does **not** call it yet |
 
 Keycloak is bound to `127.0.0.1`. Changes to `.env` are picked up by the dev server; restart it if a change does not apply.
 

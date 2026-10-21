@@ -136,7 +136,8 @@ Everything that can be finished and verified without your platforms is finished.
 - [x] Independent code review of the Day 2 to Day 4 code (see above).
 
 ### Decisions and housekeeping that need you
-- [ ] **What is the backend on port 8010?** Recorded as reserved; nothing calls it. All platform access currently goes straight from Next.js server-side.
+- [~] **Port 8010 identified:** it is your **AgenticOS** FastAPI backend (`new project langdiify/backend` on your Desktop; routers for auth, agents, workflows, approvals, knowledge, memory, audit, billing, graph and evaluation; `/docs`, `/api/system/health`). It was not running when checked. **PrimeSEC does not call it**: all Wazuh/OpenCTI/Greenbone access goes straight from Next.js server-side.
+- [ ] Decide what PrimeSEC should use the 8010 backend for (for example agent-assisted alert triage, a shared sign-in, or shared audit) before any integration is built.
 - [x] `socadmin` password rotated (2026-10-21). The new value is in `C:\Users\Admin\.primesec\socadmin-password.txt` (outside the repo). The old one no longer works.
 - [ ] Remove the DEMO lines from `.env` (and set `DEMO_LOGIN=false`) before any shared deployment.
 - [ ] `git push` and a PR to `main`: not done on purpose; commits are local to `dev-kkrish`.
