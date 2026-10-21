@@ -10,7 +10,9 @@
     "lint": "next lint",
     "demo:integrations": "node scripts/demo-integrations.js",
     "test:vapt": "node --experimental-strip-types --no-warnings scripts/test-vapt-scope.mjs",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:lib": "node --experimental-strip-types --no-warnings scripts/test-lib.mjs",
+    "test": "npm run test:vapt && npm run test:lib"
   },
   "dependencies": {
     "framer-motion": "11.18.2",

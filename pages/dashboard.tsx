@@ -1,7 +1,7 @@
 import Head from "next/head";
 import type { GetServerSideProps } from "next";
 import { getServerSession } from "next-auth/next";
-import { signOut } from "next-auth/react";
+import { fullSignOut } from "../lib/signOutClient";
 import { authOptions, PRIMESEC_ROLES } from "../lib/auth";
 import SocDashboard from "../components/SocDashboard";
 import { getDashboardData, type DashboardData } from "../lib/dashboardData";
@@ -26,7 +26,7 @@ export default function Dashboard({ user, roles, wazuhUrl, data }: Props) {
           user={user}
           roles={roles}
           wazuhUrl={wazuhUrl}
-          onSignOut={() => signOut({ callbackUrl: "/login" })}
+          onSignOut={() => void fullSignOut()}
         />
       </main>
     </>

@@ -132,6 +132,15 @@ def valid_target(value):
     return str(net.network_address) if net.prefixlen == 32 else str(net)
 
 
+def discard(kind, object_id):
+    """Best-effort removal of a Greenbone object created by a launch that then failed, so retries do not litter it."""
+    xml = f'<delete_{kind} {kind}_id="{object_id}" ultimate="1"/>'
+    try:
+        cmd(xml)
+    except BridgeError:
+        print(f"WARNING: could not remove orphaned {kind} {object_id}; delete it in Greenbone.", file=sys.stderr, flush=True)
+
+
 def create_assessment(data):
     target = valid_target(data.get("target", ""))
     name = re.sub(r"[^A-Za-z0-9 ._-]", "", str(data.get("name", "PrimeSEC assessment")))[:80].strip() or "PrimeSEC assessment"
@@ -152,11 +161,20 @@ def create_assessment(data):
     ET.SubElement(task_el, "target", {"id": target_id})
     if SCANNER_ID:
         ET.SubElement(task_el, "scanner", {"id": SCANNER_ID})
-    task_id = cmd(ET.tostring(task_el, encoding="unicode")).attrib.get("id")
-    if not task_id:
-        raise BridgeError("Greenbone did not return a task ID; verify the scan configuration and scanner IDs.")
+    try:
+        task_id = cmd(ET.tostring(task_el, encoding="unicode")).attrib.get("id")
+        if not task_id:
+            raise BridgeError("Greenbone did not return a task ID; verify the scan configuration and scanner IDs.")
+    except BridgeError:
+        discard("target", target_id)  # do not leave the target behind
+        raise
 
-    started = cmd(ET.tostring(ET.Element("start_task", {"task_id": task_id}), encoding="unicode"))
+    try:
+        started = cmd(ET.tostring(ET.Element("start_task", {"task_id": task_id}), encoding="unicode"))
+    except BridgeError:
+        discard("task", task_id)
+        discard("target", target_id)
+        raise
     return {
         "targetId": target_id, "targetName": label, "taskId": task_id,
         "reportId": text(started, "report_id") or None, "target": target, "status": "Requested",
@@ -235,7 +253,12 @@ def main():
         print("WARNING: GREENBONE_GMP_PASSWORD is passed to gvm-cli on its command line and is visible to other local users. "
               "Prefer GVM_CLI_CONFIG (a mode-0600 gvm-tools config file).", file=sys.stderr, flush=True)
     for r in ALLOWED_RANGES:
-        ipaddress.ip_network(r, strict=False)  # fail fast on a typo
+        try:
+            net = ipaddress.ip_network(r, strict=False)
+        except ValueError:
+            raise SystemExit(f"GREENBONE_ALLOWED_RANGES contains an invalid network: {r!r}")
+        if net.version != 4:
+            raise SystemExit(f"GREENBONE_ALLOWED_RANGES must be IPv4 only (the bridge only scans IPv4): {r!r}")
     print(f"PrimeSEC Greenbone bridge listening on http://{HOST}:{PORT}; socket={SOCKET}; "
           f"allowed ranges={ALLOWED_RANGES or 'not restricted'}", flush=True)
     ThreadingHTTPServer((HOST, PORT), Handler).serve_forever()

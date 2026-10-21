@@ -70,6 +70,9 @@ export const authOptions: NextAuthOptions = {
         token.issuer = "demo";
         return token;
       }
+      // Kept only inside the encrypted session JWT and never exposed to the page: /api/logout-url uses it as
+      // id_token_hint so sign-out ends the Keycloak session too, not just this app's cookie.
+      if (account?.id_token) token.idToken = account.id_token;
       if (account?.access_token) {
         // Roles are read server-side only; the access token itself is never stored in the JWT.
         const claims = decodeJwtPayload(account.access_token);

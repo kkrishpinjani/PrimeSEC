@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { LogoMark } from "./Logo";
+import { fullSignOut } from "../lib/signOutClient";
 import type { VaptOverview, VaptScope } from "../lib/vapt";
 import type { AuditEvent } from "../lib/audit";
 
@@ -8,19 +9,29 @@ type Overview = {
   scanner: VaptOverview;
   scopes: VaptScope[];
   audit: AuditEvent[];
+  scopesError?: string | null;
   canApprove: boolean;
   canScan: boolean;
 };
 
 const when = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleString() : "—");
-const isoDay = (daysAhead: number) => new Date(Date.now() + daysAhead * 86_400_000).toISOString().slice(0, 10);
+/** yyyy-mm-dd for today + N days in the viewer's LOCAL time (the same calendar the date picker and the 23:59:59 expiry use). */
+const localDay = (daysAhead: number) => {
+  const d = new Date(Date.now() + daysAhead * 86_400_000);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+// The server allows at most 90 days from now. End-of-day on today+89 is always inside that, in every timezone.
+const MIN_DAYS = 1;
+const MAX_DAYS = 89;
 const active = (s: VaptScope) => s.status === "Approved" && Date.parse(s.expiresAt) > Date.now();
 
 function describe(e: AuditEvent): { label: string; detail: string; tone: "ok" | "warn" | "bad" } {
   switch (e.action) {
     case "vapt_scope_approved": return { label: "Scope approved", detail: `${e.scope.name} · ${e.scope.targets.join(", ")}`, tone: "ok" };
     case "vapt_scope_revoked": return { label: "Scope revoked", detail: e.scope.name, tone: "warn" };
+    case "vapt_assessment_requested": return { label: "Scan requested", detail: e.target, tone: "ok" };
     case "vapt_assessment_started": return { label: "Scan started", detail: e.target, tone: "ok" };
+    case "vapt_assessment_failed": return { label: "Scan failed", detail: `${e.target}: ${e.reason ?? "error"}`, tone: "bad" };
     case "vapt_assessment_denied": return { label: "Scan refused", detail: `${e.target}: ${e.reason ?? "not in scope"}`, tone: "bad" };
     default: return { label: "Event", detail: "", tone: "ok" };
   }
@@ -32,7 +43,7 @@ export default function VaptWorkspace({ user, roles }: { user: { name?: string |
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
-  const [scope, setScope] = useState({ name: "", authorizationReference: "", targets: "", expiresAt: isoDay(30), acknowledgePublic: false });
+  const [scope, setScope] = useState({ name: "", authorizationReference: "", targets: "", expiresAt: localDay(30), acknowledgePublic: false });
   const [scan, setScan] = useState({ name: "Authorized infrastructure assessment", target: "" });
 
   const load = useCallback(async () => {
@@ -97,6 +108,7 @@ export default function VaptWorkspace({ user, roles }: { user: { name?: string |
         <span className="pv-chip">Vulnerability assessment (VAPT)</span>
         <div className="pv-actions">
           <button className="pv-btn" onClick={() => void load()} disabled={loading}>{loading ? "Checking…" : "↻ Refresh"}</button>
+          <button className="pv-btn" onClick={() => void fullSignOut()}>Sign out</button>
           <span className="pv-user" title={roles.join(", ")}>
             <span className="pv-avatar">{displayName.slice(0, 1).toUpperCase()}</span>
             <span className="pv-user-text"><b>{displayName}</b><small>{roles[0] ?? "No role"}</small></span>
@@ -106,6 +118,7 @@ export default function VaptWorkspace({ user, roles }: { user: { name?: string |
 
       <div className="vapt-body">
         <p className="vapt-warning"><b>Only scan systems you are explicitly authorized to assess.</b> A scan can start only inside a scope a SOC_Admin approved with a written authorization reference and an expiry. Every approval, revocation, launch and refusal is audited.</p>
+        {data?.scopesError && <div className="pv-list pv-error" role="alert">{data.scopesError}</div>}
         {error && <div className="pv-list pv-error" role="alert">{error}</div>}
         {notice && <div className="pv-list vapt-ok" role="status">{notice}</div>}
 
@@ -151,7 +164,7 @@ export default function VaptWorkspace({ user, roles }: { user: { name?: string |
             <label>Scope name<input required maxLength={100} value={scope.name} onChange={(e) => setScope({ ...scope, name: e.target.value })} /></label>
             <label>Authorization reference (contract, ticket or approval id)<input required minLength={8} maxLength={120} value={scope.authorizationReference} onChange={(e) => setScope({ ...scope, authorizationReference: e.target.value })} /></label>
             <label>Approved targets (one per line, /24 or narrower)<textarea required rows={3} value={scope.targets} placeholder={"10.20.5.0/24\n10.20.9.14"} onChange={(e) => setScope({ ...scope, targets: e.target.value })} /></label>
-            <label>Authorization expires (max 90 days)<input type="date" required min={isoDay(1)} max={isoDay(90)} value={scope.expiresAt} onChange={(e) => setScope({ ...scope, expiresAt: e.target.value })} /></label>
+            <label>Authorization expires (max 90 days)<input type="date" required min={localDay(MIN_DAYS)} max={localDay(MAX_DAYS)} value={scope.expiresAt} onChange={(e) => setScope({ ...scope, expiresAt: e.target.value })} /></label>
             <label className="vapt-check"><input type="checkbox" checked={scope.acknowledgePublic} onChange={(e) => setScope({ ...scope, acknowledgePublic: e.target.checked })} /> These include publicly routable (internet) addresses, and I hold written authorization from their owner.</label>
             <button className="pv-btn pv-btn-primary" disabled={busy}>{busy ? "Working…" : "Approve scope"}</button>
           </form>

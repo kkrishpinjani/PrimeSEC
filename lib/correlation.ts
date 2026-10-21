@@ -29,7 +29,9 @@ const DOMAIN = /\b(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,24}\b/gi;
 // Common file extensions that look like TLDs: "powershell.exe" is a file, not a domain.
 const FILE_EXTENSIONS = new Set([
   "exe", "dll", "sys", "bat", "cmd", "ps1", "vbs", "js", "jse", "py", "sh", "so", "tmp", "dat", "log", "txt", "conf", "cfg", "ini",
-  "json", "xml", "yml", "yaml", "zip", "rar", "tar", "gz", "msi", "doc", "docx", "xls", "xlsx", "pdf", "lnk", "jar", "bin", "db", "sql", "html", "htm", "php", "asp", "aspx", "evtx"
+  "json", "xml", "yml", "yaml", "zip", "rar", "tar", "gz", "msi", "doc", "docx", "xls", "xlsx", "pdf", "lnk", "jar", "bin", "db", "sql", "html", "htm", "php", "asp", "aspx", "evtx",
+  "config", "properties", "plist", "toml", "csv", "tsv", "class", "pyc", "dylib", "rpm", "deb", "msu", "cab", "iso", "img", "png", "jpg", "jpeg", "gif", "svg", "ico", "css", "tsx", "jsx",
+  "key", "pem", "crt", "cer", "pfx", "p12", "bak", "manifest", "resx", "nupkg", "mdb", "ldb", "lock", "pid", "sock", "socket", "service"
 ]);
 
 const norm = (v: string) => v.trim().toLowerCase();
@@ -48,7 +50,11 @@ export function extractObservables(text: string): Observable[] {
   const withoutIps = input.replace(IPV4, " ");
   for (const d of withoutIps.match(DOMAIN) || []) {
     const tld = d.slice(d.lastIndexOf(".") + 1).toLowerCase();
-    if (!FILE_EXTENSIONS.has(tld)) add("domain", d);
+    if (FILE_EXTENSIONS.has(tld)) continue;
+    // Real hostnames in logs are all-lowercase or all-uppercase. Mixed case such as
+    // "System.Net.Sockets" or "Microsoft.Windows.Defender" is a code identifier, not a domain.
+    if (d !== d.toLowerCase() && d !== d.toUpperCase()) continue;
+    add("domain", d);
   }
   return [...out.values()];
 }

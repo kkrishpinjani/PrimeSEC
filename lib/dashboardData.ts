@@ -108,10 +108,12 @@ function overviewFrom(w: WazuhOverview): Overview {
     severity: SAMPLE.severity,
     map: { home, markers: [] as MapMarker[] }
   };
-  if (!w.status.connected) return { source: "sample", stats: SAMPLE.overview, notes: [], ...sampleBase };
+  const managerUp = w.status.connected;
+  const indexerUp = w.alerts.available && w.alerts.severity !== null;
+  if (!managerUp && !indexerUp) return { source: "sample", stats: SAMPLE.overview, notes: [], ...sampleBase };
 
-  const endpoints: Stat = ["Endpoints", fmt(w.agents.total)];
-  if (!w.alerts.available || !w.alerts.severity) {
+  const endpoints: Stat = ["Endpoints", managerUp ? fmt(w.agents.total) : "—"];
+  if (!indexerUp || !w.alerts.severity) {
     return {
       source: "mixed",
       stats: [endpoints, ["Alerts (24h)", "—"], ["Critical alerts (24h)", "—"]],
@@ -128,7 +130,7 @@ function overviewFrom(w: WazuhOverview): Overview {
   if (!markers.length) notes.push("No geolocated alert sources in the last 24 h (the map needs Wazuh GeoIP data on srcip).");
   else if (!home) notes.push("Set PRIMESEC_HOME_LAT and PRIMESEC_HOME_LON to draw attack paths to your SOC.");
   return {
-    source: "live",
+    source: managerUp ? "live" : "mixed",
     stats: [endpoints, ["Alerts (24h)", fmt(w.alerts.total24h)], ["Critical alerts (24h)", fmt(w.alerts.critical24h)]],
     radar: { score: threatLevel(w.alerts.severity), basis: RADAR_BASIS },
     trend: w.alerts.hourly,
@@ -157,8 +159,8 @@ function intelFrom(c: OpenCtiOverview): { source: SectionSource; data: Dashboard
 }
 
 function vulnsFrom(w: WazuhOverview): { source: SectionSource; data: DashboardData["vulns"]; note?: string } {
-  if (!w.status.connected || !w.vulns.available) {
-    return { source: "sample", data: SAMPLE.vulns, note: w.status.connected ? w.vulns.message : undefined };
+  if (!w.vulns.available) {
+    return { source: "sample", data: SAMPLE.vulns, note: w.vulns.configured ? w.vulns.message : undefined };
   }
   return {
     source: "live",
@@ -170,7 +172,7 @@ function vulnsFrom(w: WazuhOverview): { source: SectionSource; data: DashboardDa
 }
 
 function investigationsFrom(w: WazuhOverview): { source: SectionSource; data: DashboardData["investigations"] } {
-  if (!w.status.connected || !w.alerts.available) return { source: "sample", data: SAMPLE.investigations };
+  if (!w.alerts.available) return { source: "sample", data: SAMPLE.investigations };
   return {
     source: "live",
     data: {

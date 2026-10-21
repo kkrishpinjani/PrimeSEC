@@ -170,6 +170,11 @@ export async function createScope(input: ScopeInput, actor: { email?: string | n
   return withScopes(async (scopes) => ({ scopes: [...scopes, scope], result: scope }));
 }
 
+/** Removes a scope outright. Only for rolling back an approval whose audit event could not be written. */
+export async function deleteScope(id: string): Promise<void> {
+  await withScopes(async (scopes) => ({ scopes: scopes.filter((s) => s.id !== id), result: undefined }));
+}
+
 /** `changed` is false when the scope was already revoked, so callers audit real changes only. */
 export async function revokeScope(
   id: string,
@@ -187,16 +192,18 @@ export async function revokeScope(
 /* ---------------------------------- bridge ------------------------------------ */
 
 const bridgeTimeout = () => Number(process.env.GREENBONE_TIMEOUT_MS || 15000);
+// Starting a scan makes the bridge run three sequential gvm-cli commands, so it needs far longer than a read.
+const launchTimeout = () => Number(process.env.GREENBONE_LAUNCH_TIMEOUT_MS || 120000);
 
 type CodedError = Error & { code?: string };
 const coded = (message: string, code: string): CodedError => Object.assign(new Error(message), { code });
 
-async function bridgeFetch(pathname: string, options: RequestInit = {}): Promise<any> {
+async function bridgeFetch(pathname: string, options: RequestInit = {}, timeoutMs = bridgeTimeout()): Promise<any> {
   const base = String(process.env.GREENBONE_BRIDGE_URL || "").trim().replace(/\/+$/, "");
   const token = String(process.env.GREENBONE_BRIDGE_TOKEN || "");
   if (!base || !token) throw coded("Configure GREENBONE_BRIDGE_URL and GREENBONE_BRIDGE_TOKEN in .env.", "NOT_CONFIGURED");
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), bridgeTimeout());
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(`${base}${pathname}`, {
       ...options,
@@ -213,7 +220,14 @@ async function bridgeFetch(pathname: string, options: RequestInit = {}): Promise
     if (!response.ok) throw coded(String(body?.error || `Greenbone bridge request failed (${response.status}).`).slice(0, 240), "BRIDGE_REQUEST");
     return body;
   } catch (error) {
-    if ((error as Error).name === "AbortError") throw coded("Greenbone bridge timed out.", "TIMEOUT");
+    if ((error as Error).name === "AbortError") {
+      throw coded(
+        options.method === "POST"
+          ? "The Greenbone bridge did not answer in time. The scan may still have started: check the Greenbone task list before retrying."
+          : "Greenbone bridge timed out.",
+        "TIMEOUT"
+      );
+    }
     if ((error as CodedError).code) throw error;
     throw coded("Could not reach the Greenbone bridge. Check GREENBONE_BRIDGE_URL and that the bridge is running.", "UNREACHABLE");
   } finally {
@@ -242,5 +256,5 @@ export async function getVaptOverview(): Promise<VaptOverview> {
 /** Calls the bridge. Callers MUST have passed targetAllowed() first. */
 export async function launchVaptAssessment(input: { target: string; name?: unknown }): Promise<VaptAssessment> {
   const name = String(input.name || "PrimeSEC assessment").slice(0, 80);
-  return bridgeFetch("/v1/assessments", { method: "POST", body: JSON.stringify({ target: normalizeTarget(input.target), name }) });
+  return bridgeFetch("/v1/assessments", { method: "POST", body: JSON.stringify({ target: normalizeTarget(input.target), name }) }, launchTimeout());
 }

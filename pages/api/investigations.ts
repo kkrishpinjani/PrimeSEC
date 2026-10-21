@@ -5,6 +5,7 @@ import { getWazuhAlertById, searchOpenCtiIndicators } from "../../lib/integratio
 import { correlate, extractObservables, MAX_OBSERVABLES } from "../../lib/correlation";
 import { readAuditEvents, writeAuditEvent } from "../../lib/audit";
 import { allowRequest } from "../../lib/rateLimit";
+import { logError } from "../../lib/log";
 
 const INVESTIGATOR_ROLES = ["SOC_Admin", "SOC_Analyst"];
 // Wazuh/OpenSearch document ids: short, URL-safe. Anything else is rejected before it reaches an upstream query.
@@ -21,7 +22,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (req.method === "GET") {
     try {
       return res.status(200).json({ events: await readAuditEvents(25, ["alert_investigation_created"]) });
-    } catch {
+    } catch (error) {
+      logError("investigations: reading audit events", error);
       return res.status(500).json({ error: "Could not read audit events." });
     }
   }
@@ -76,7 +78,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       openCti: { configured: cti.configured, connected: cti.connected, message: cti.message },
       correlation
     });
-  } catch {
+  } catch (error) {
+    logError("investigation failed", error);
     return res.status(502).json({ error: "Investigation could not be completed. Check integration health and server logs." });
   }
 }

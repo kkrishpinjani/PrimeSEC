@@ -21,10 +21,14 @@ export type VaptScopeEvent = Base & {
   scope: { id: string; name: string; targets: string[]; authorizationReference: string; expiresAt: string; includesPublicRanges: boolean };
 };
 
+/**
+ * A launch writes `requested` BEFORE Greenbone is called (the audit must exist even if the call
+ * times out), then `started` or `failed`. `denied` is a refused attempt.
+ */
 export type VaptAssessmentEvent = Base & {
-  action: "vapt_assessment_started" | "vapt_assessment_denied";
+  action: "vapt_assessment_requested" | "vapt_assessment_started" | "vapt_assessment_failed" | "vapt_assessment_denied";
   target: string;
-  /** Why a launch was refused (denied events only). */
+  /** Why a launch was refused or failed. */
   reason?: string;
   scopeId?: string;
   assessment?: { taskId: string; targetId: string; targetName: string; status: string };
@@ -52,21 +56,54 @@ export async function writeAuditEvent(event: AuditInput): Promise<AuditEvent> {
   return record;
 }
 
-/** Newest first, optionally only the given actions. Unparseable lines are skipped, never thrown. */
+/**
+ * Newest first, optionally only the given actions. Reads the file from the end in chunks and stops as soon
+ * as enough events are found, so cost does not grow with the size of the audit file.
+ * Unparseable lines are skipped, never thrown.
+ */
 export async function readAuditEvents(limit = 25, actions?: AuditAction[]): Promise<AuditEvent[]> {
   const n = Math.min(Math.max(Math.floor(limit) || 25, 1), 100);
+  let handle: import("fs").promises.FileHandle;
   try {
-    const content = await fs.readFile(auditPath(), "utf8");
-    const events = content
-      .split("\n")
-      .filter(Boolean)
-      .map((line) => {
-        try { return JSON.parse(line) as AuditEvent; } catch { return null; }
-      })
-      .filter((e): e is AuditEvent => e !== null && (!actions || actions.includes(e.action)));
-    return events.slice(-n).reverse();
+    handle = await fs.open(auditPath(), "r");
   } catch (error) {
     if ((error as NodeJS.ErrnoException)?.code === "ENOENT") return [];
     throw error;
   }
+  const out: AuditEvent[] = [];
+  const take = (line: string) => {
+    if (!line.trim()) return;
+    try {
+      const e = JSON.parse(line) as AuditEvent;
+      if (!actions || actions.includes(e.action)) out.push(e);
+    } catch { /* skip a corrupt line */ }
+  };
+  try {
+    const { size } = await handle.stat();
+    const CHUNK = 64 * 1024;
+    let pos = size;
+    let carry: Buffer = Buffer.alloc(0); // bytes of a line that continues into the previous chunk
+    while (pos > 0 && out.length < n) {
+      const len = Math.min(CHUNK, pos);
+      pos -= len;
+      const chunk = Buffer.alloc(len);
+      await handle.read(chunk, 0, len, pos);
+      const data = Buffer.concat([chunk, carry]);
+      let body: Buffer;
+      if (pos > 0) {
+        const firstNewline = data.indexOf(0x0a);
+        if (firstNewline === -1) { carry = data; continue; }
+        carry = data.subarray(0, firstNewline);
+        body = data.subarray(firstNewline + 1);
+      } else {
+        carry = Buffer.alloc(0);
+        body = data;
+      }
+      const lines = body.toString("utf8").split("\n");
+      for (let i = lines.length - 1; i >= 0 && out.length < n; i--) take(lines[i]);
+    }
+  } finally {
+    await handle.close();
+  }
+  return out.slice(0, n);
 }

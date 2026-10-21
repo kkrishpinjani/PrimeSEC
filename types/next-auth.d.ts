@@ -17,5 +17,6 @@ declare module "next-auth/jwt" {
   interface JWT {
     roles?: string[];
     issuer?: string;
+    idToken?: string;
   }
 }

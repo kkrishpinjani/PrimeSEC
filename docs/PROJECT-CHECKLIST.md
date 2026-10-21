@@ -1,6 +1,6 @@
 # PrimeSEC project checklist (Day 1 to Day 4)
 
-Last verified: 2026-10-21.
+Last verified: 2026-10-21 (including a real Keycloak run and an independent code review, both done).
 
 **Legend**
 - `[x]` **Done and verified** in this environment (tests, real Keycloak users, or a real browser).
@@ -25,11 +25,12 @@ Everything that can be finished and verified without your platforms is finished.
 ### Keycloak and sign-in
 - [x] Keycloak container starts and imports the `primesoc` realm (realm discovery URL answers; realm survives a container recreate).
 - [x] Original realm import bug fixed: the custom `clientScopes` block broke every sign-in with `invalid_scope`.
-- [x] Real Keycloak users can sign in (`socadmin`, plus throwaway users in earlier test runs).
+- [x] Real Keycloak users can sign in (`socadmin`, plus throwaway users). Re-run after the Next 15 / next-auth upgrade and after the review fixes: 21 of 21 role/flow checks pass, plus 9 of 9 sign-out checks.
 - [x] Roles `SOC_Admin` / `SOC_Analyst` / `SOC_ReadOnly` reach the app (`realm_access.roles`) and are shown in the dashboard.
 - [x] A user with no PrimeSEC role is redirected to `/403` and gets 403 from every API.
 - [x] `/dashboard` redirects to `/login` when signed out; sign-out returns to login.
 - [x] `/api/health` returns 200.
+- [x] **Sign out really signs out:** it ends the Keycloak SSO session too (RP-initiated logout), so "Continue with Keycloak" asks for a password again. Verified against real Keycloak, with a control showing the old behaviour silently signed you back in.
 - [x] Keycloak is bound to `127.0.0.1:8080`; post-logout redirect restricted to `/login` (was a wildcard).
 - [x] `NEXTAUTH_SECRET` guard: authentication is refused when the secret is missing or still the placeholder.
 - [x] Renamed to PrimeSEC everywhere user-visible (realm and client IDs `primesoc` / `primesoc-web` intentionally kept, since renaming breaks the import).
@@ -49,6 +50,8 @@ Everything that can be finished and verified without your platforms is finished.
 
 ### Built and verified (demo server)
 - [x] Server-side adapters: Wazuh Manager API, Wazuh Indexer, Wazuh Vulnerability Detector index, OpenCTI GraphQL (typed port of the Day 2 package).
+- [x] The Manager API and the Indexer are queried **independently**: a Manager outage no longer hides live Indexer alerts, vulnerabilities or investigations (found by the code review; verified).
+- [x] The raw Wazuh JWT is read as text, not truncated at 500 characters (found by the code review; verified with a 900-character token).
 - [x] `GET /api/integrations/wazuh` and `/opencti`: 401 without a session, 403 without a role, `no-store`, read-only.
 - [x] No upstream credential or token appears in any API response or page HTML.
 - [x] Unconfigured or failing platforms show a status and labelled sample data, never a broken page. Wrong password reports "authentication failed (401)", not "unreachable".
@@ -72,7 +75,8 @@ Everything that can be finished and verified without your platforms is finished.
 
 - [x] **Investigate** on each live Wazuh alert (disabled for sample alerts and for `SOC_ReadOnly`).
 - [x] The browser sends only an alert id; the server re-reads the alert from Wazuh. Malformed ids rejected (400), unknown ids 404.
-- [x] Observables (IPv4, domains, MD5/SHA-1/SHA-256) extracted from the alert; OpenCTI searched per observable; matches are **exact**, not substring. `powershell.exe` is not mistaken for a domain.
+- [x] Observables (IPv4, domains, MD5/SHA-1/SHA-256) extracted from the alert; OpenCTI searched per observable; matches are **exact**, not substring.
+- [x] File names and code identifiers are not mistaken for domains (`powershell.exe`, `app.config`, `System.Net.Sockets`, `Microsoft.Windows.Defender`), so junk cannot crowd real indicators out of the 25-observable cap (found by the code review; 33 unit tests).
 - [x] Results labelled "Potential match: analyst validation required"; a no-match and a "nothing to search" result are worded honestly.
 - [x] Roles enforced: `SOC_ReadOnly` gets 403 on creating an investigation; analyst and admin succeed (verified with real Keycloak users and via the demo role).
 - [x] Cross-origin POST rejected (403); 6th investigation in a minute gets 429.
@@ -95,10 +99,16 @@ Everything that can be finished and verified without your platforms is finished.
 - [x] Role rules: `SOC_ReadOnly` view only; `SOC_Analyst` scans inside a scope; only `SOC_Admin` approves/revokes.
 - [x] 401 without a session, cross-origin writes rejected, launches limited to 5 per 10 minutes per user.
 - [x] Approval, revocation, launch and **refused launch** are all audited and shown in the workspace.
+- [x] **Audit before launch, fail closed:** a `requested` event is written before Greenbone is called; if the audit log is unavailable the scan is **not started** (503), and a timed-out or failed launch is audited as `failed` (found by the code review; verified).
+- [x] An approval whose audit write fails is **rolled back**; a revocation whose audit write fails still takes effect (the safe direction) and reports `auditRecorded: false`.
+- [x] The launch request has its own, longer timeout (`GREENBONE_LAUNCH_TIMEOUT_MS`, default 120 s), and a timeout says the scan may still have started so nobody blindly retries.
+- [x] A corrupt or unreadable scope store fails closed (no scan authorized) and says so in the UI; errors reach the server log but never the browser (no filesystem paths leak).
+- [x] The date picker's last allowed day is accepted by the server in every timezone.
 
 ### Bridge and UI
 - [x] `/vapt` workspace (status, scopes, launch form, tasks, audit trail), linked from the dashboard and the Vulnerabilities tab. Forms exercised in a real browser.
-- [~] Bridge (`bridge/server.py`) verified against the `gvm-cli` **test double**: token of 32+ chars required, strict target rules, optional independent allow-list, password kept out of the process list via a config file.
+- [~] Bridge (`bridge/server.py`) verified against the `gvm-cli` **test double**: token of 32+ chars required, strict target rules, optional independent allow-list (IPv4 only, validated at startup), password kept out of the process list via a config file.
+- [~] A launch that fails partway removes the Greenbone target/task it already created, so retries do not litter Greenbone (verified against the test double with injected failures).
 - [~] Demo bridge on `:9099` records "(demo)" tasks and scans nothing.
 - [ ] Greenbone Community Edition deployed from its current official guide; feeds synced.
 - [ ] gvmd socket reachable only by the bridge's service account (never world-writable).
@@ -114,24 +124,26 @@ Everything that can be finished and verified without your platforms is finished.
 ### Security and quality
 - [x] Dependencies pinned. Production `npm audit`: **0 vulnerabilities** (Next 15.5.28, next-auth 4.24.15, patched PostCSS via `overrides`). The next-auth update also fixes the OAuth state/PKCE cookie binding issue relevant to the Keycloak login.
 - [x] Remaining audit findings: 5 dev-only (`braces`, via the linter). No patched release exists; nothing from it ships.
-- [x] `tsc`, lint, production build and `npm run test:vapt` all pass on the upgraded stack.
+- [x] `tsc`, lint, production build and `npm test` (73 unit tests: scan-scope rules, audit reader, observable extraction) all pass on the upgraded stack.
 - [x] Full API regression and a browser pass after the Next 15 upgrade: dashboard, globe, investigations, VAPT, role rules, no console errors.
 - [x] README rewritten as one coherent document; per-day checklists in `docs/`.
-- [x] gstack installed in `.claude/skills/gstack` (project-local). `/review` was run once, on the Day 1 code.
+- [x] gstack installed in `.claude/skills/gstack` (project-local, git-ignored).
+- [x] **Independent code review of the whole Day 1-4 branch** (high effort): 10 findings, all confirmed and fixed (audit-before-launch, launch timeout, audit-failure handling, date picker, Keycloak sign-out, Wazuh token truncation, Manager/Indexer coupling, error logging, audit file reads, junk observables, bridge orphan cleanup, allow-list validation).
+- [x] The audit log is read from the end of the file, so its cost does not grow with the file (tested against a naive reader on 4,000-line files with multi-byte characters split across read chunks).
 
-### Verification still owed
-- [ ] **Real Keycloak login retest after the Next 15 / next-auth 4.24.15 upgrade.** Docker was stopped, so the OAuth flow was re-verified only through the demo login. Start Docker, sign in as `socadmin`, and open `/dashboard`, `/vapt`, and run an investigation.
-- [ ] An independent code review of the Day 2 to Day 4 code (gstack `/review`, once the work is committed and has a clean diff).
+### Verification
+- [x] Real Keycloak login retest after the Next 15 / next-auth 4.24.15 upgrade and after the review fixes (21 role/flow checks + 9 sign-out checks, all passing).
+- [x] Independent code review of the Day 2 to Day 4 code (see above).
 
 ### Decisions and housekeeping that need you
 - [ ] **What is the backend on port 8010?** Recorded as reserved; nothing calls it. All platform access currently goes straight from Next.js server-side.
-- [ ] **Rotate the `socadmin` password.** It was shown in chat on 2026-10-19. (Keycloak admin console, realm `primesoc`, user `socadmin`.)
+- [x] `socadmin` password rotated (2026-10-21). The new value is in `C:\Users\Admin\.primesec\socadmin-password.txt` (outside the repo). The old one no longer works.
 - [ ] Remove the DEMO lines from `.env` (and set `DEMO_LOGIN=false`) before any shared deployment.
 - [ ] `git push` and a PR to `main`: not done on purpose; commits are local to `dev-kkrish`.
 
 ### Before any production use (known MVP limits)
 - [ ] Replace the local JSON audit and scope files with a durable, append-only, access-controlled store.
-- [ ] Persist rate limits (currently in-memory per process).
+- [ ] Persist rate limits and serialise scope-file writes across processes. Both are per-process today (fine for one Next.js process; with several, a concurrent approve/revoke could lose an update and the rate limit multiplies). Move scopes and audit into a database before running more than one process.
 - [ ] Refresh-token rotation and periodic role re-check (roles are fixed for the 8-hour session).
 - [ ] HTTPS everywhere, trusted certificates, secret rotation, rotate the realm's local client secret.
 - [ ] Use a supported production Greenbone deployment (the container guide is for evaluation).

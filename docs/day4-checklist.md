@@ -17,6 +17,9 @@
 
 ## Audit
 - [x] Scope approval, revocation, scan launch **and refused launch attempts** are written to `data/audit-events.jsonl` and shown in the workspace. Revoking an already revoked scope does not log again.
+- [x] **Audit before launch, fail closed:** `vapt_assessment_requested` is written before Greenbone is called; if that write fails the scan is not started (503). A failed or timed-out launch is audited as `vapt_assessment_failed`.
+- [x] An approval whose audit write fails is rolled back; a revocation whose audit write fails still takes effect and reports `auditRecorded: false`.
+- [x] An unreadable scope store denies every scan and is shown in the UI.
 
 ## Bridge (`bridge/server.py`)
 - [x] Refuses to start with a token shorter than 32 characters; all routes except `/health` need the bearer token.

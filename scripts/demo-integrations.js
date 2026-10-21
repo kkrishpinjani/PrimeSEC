@@ -21,7 +21,8 @@ const CREDS = {
   greenboneToken: "demo-greenbone-bridge-token"
 };
 const DEMO_TASKS = [];
-const WAZUH_JWT = "demo-wazuh-jwt";
+// Real Wazuh JWTs can be long (many RBAC roles). A long token here guards against any truncation of the raw token.
+const WAZUH_JWT = "eyJ-demo." + "A".repeat(880) + ".sig";
 
 const basic = (u, p) => "Basic " + Buffer.from(`${u}:${p}`).toString("base64");
 const ago = (minutes) => new Date(Date.now() - minutes * 60000).toISOString();

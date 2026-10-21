@@ -62,6 +62,16 @@ def main():
         t = {"id": str(uuid.uuid4()), "name": root.findtext("name", ""), "hosts": root.findtext("hosts", "")}
         state["targets"].append(t)
         out = f'<create_target_response status="201" status_text="OK, resource created" id="{t["id"]}"/>'
+    elif tag == "create_task" and os.getenv("FAKE_GVM_FAIL") == "create_task":
+        out = '<create_task_response status="404" status_text="Failed to find config (test double)"/>'
+    elif tag == "start_task" and os.getenv("FAKE_GVM_FAIL") == "start_task":
+        out = '<start_task_response status="500" status_text="Scanner unavailable (test double)"/>'
+    elif tag == "delete_target":
+        state["targets"] = [t for t in state["targets"] if t["id"] != root.attrib.get("target_id")]
+        out = '<delete_target_response status="200" status_text="OK"/>'
+    elif tag == "delete_task":
+        state["tasks"] = [t for t in state["tasks"] if t["id"] != root.attrib.get("task_id")]
+        out = '<delete_task_response status="200" status_text="OK"/>'
     elif tag == "create_task":
         target = next((t for t in state["targets"] if t["id"] == root.find("target").attrib.get("id")), None)
         if target is None:

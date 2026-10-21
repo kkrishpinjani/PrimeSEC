@@ -14,7 +14,7 @@ Items marked [x] were verified against the local demo Wazuh/OpenCTI (`npm run de
 
 ## Correlation
 - [x] Observables (IPv4, domains, MD5/SHA-1/SHA-256) are extracted from the alert (description, full log, `data`, `syscheck`) and from OpenCTI indicator names and patterns, and compared for **exact** equality (no substring matching).
-- [x] File names such as `powershell.exe` are not treated as domains.
+- [x] File names such as `powershell.exe` and `app.config`, and mixed-case code identifiers such as `System.Net.Sockets`, are not treated as domains.
 - [x] OpenCTI is searched per observable, so an indicator is found even if it is not among the latest few.
 - [x] Every result is labelled "Potential match: analyst validation required"; a no-match result says it is not proof the alert is benign.
 - [x] When OpenCTI is unreachable the result says no reliable correlation is possible.

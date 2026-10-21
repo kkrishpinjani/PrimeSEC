@@ -120,10 +120,18 @@ async function getWazuhToken(): Promise<{ baseUrl: string; token: string }> {
     method: "POST",
     headers: { Authorization: `Basic ${basic(username, password)}`, Accept: "application/json" }
   });
-  const body = await readJson(response);
+  // With ?raw=true Wazuh returns the bare JWT as text (it can be long). Never route it through readJson,
+  // whose non-JSON fallback truncates to 500 characters.
+  const text = (await response.text()).trim();
   if (!response.ok) throw codedError(`Wazuh authentication failed (${response.status}).`, "UPSTREAM_AUTH");
-  const token = typeof body === "string" ? body : body?.data?.token || body?.token || body?.message || body?.data?.affected_items?.[0]?.token;
-  if (!token) throw codedError("Wazuh API did not return an authentication token.", "UPSTREAM_RESPONSE");
+  let token = "";
+  try {
+    const parsed = JSON.parse(text);
+    token = typeof parsed === "string" ? parsed : parsed?.data?.token || parsed?.token || parsed?.data?.affected_items?.[0]?.token || "";
+  } catch {
+    token = text;
+  }
+  if (!token || /\s/.test(token)) throw codedError("Wazuh API did not return an authentication token.", "UPSTREAM_RESPONSE");
   return { baseUrl, token };
 }
 
@@ -305,33 +313,33 @@ async function getWazuhVulns(): Promise<WazuhVulns> {
 }
 
 export async function getWazuhOverview(): Promise<WazuhOverview> {
-  try {
+  // The Manager API (agents) and the Indexer (alerts, vulnerabilities) are separate services with
+  // separate credentials. Each is queried independently so an outage of one never hides the other.
+  const agentsPromise = (async () => {
     const { baseUrl, token } = await getWazuhToken();
-    const [agentResult, alertResult, vulns] = await Promise.all([
-      Promise.allSettled([wazuhApiGet(baseUrl, token, "/agents?limit=10&sort=-id")]).then((r) => r[0]),
-      Promise.allSettled([getWazuhAlerts()]).then((r) => r[0]),
-      getWazuhVulns()
-    ]);
-    if (agentResult.status === "rejected") throw agentResult.reason;
-    const alerts: WazuhAlerts =
-      alertResult.status === "fulfilled"
-        ? alertResult.value
-        : { configured: true, available: false, total24h: null, critical24h: null, recent: [], ...NO_ALERTS, message: safeError(alertResult.reason) };
-    return {
-      status: status("Wazuh", true, true, "Wazuh API connected."),
-      agents: unpackWazuhAgents(agentResult.value),
-      alerts,
-      vulns
-    };
-  } catch (error) {
-    const notConfigured = (error as CodedError)?.code === "NOT_CONFIGURED";
-    return {
-      status: status("Wazuh", !notConfigured, false, notConfigured ? (error as Error).message : safeError(error)),
-      agents: { total: null, items: [] },
-      alerts: { configured: Boolean(process.env.WAZUH_INDEXER_URL), available: false, total24h: null, critical24h: null, recent: [], ...NO_ALERTS, message: "Alert metrics unavailable." },
-      vulns: { configured: Boolean(process.env.WAZUH_INDEXER_URL), available: false, total: null, critical: null, hosts: null, top: [], message: "Vulnerability data unavailable." }
-    };
+    return unpackWazuhAgents(await wazuhApiGet(baseUrl, token, "/agents?limit=10&sort=-id"));
+  })();
+  const [agentResult, alertResult, vulns] = await Promise.all([
+    Promise.allSettled([agentsPromise]).then((r) => r[0]),
+    Promise.allSettled([getWazuhAlerts()]).then((r) => r[0]),
+    getWazuhVulns()
+  ]);
+
+  const alerts: WazuhAlerts =
+    alertResult.status === "fulfilled"
+      ? alertResult.value
+      : { configured: true, available: false, total24h: null, critical24h: null, recent: [], ...NO_ALERTS, message: safeError(alertResult.reason) };
+
+  if (agentResult.status === "fulfilled") {
+    return { status: status("Wazuh", true, true, "Wazuh API connected."), agents: agentResult.value, alerts, vulns };
   }
+  const notConfigured = (agentResult.reason as CodedError)?.code === "NOT_CONFIGURED";
+  return {
+    status: status("Wazuh", !notConfigured, false, notConfigured ? (agentResult.reason as Error).message : safeError(agentResult.reason)),
+    agents: { total: null, items: [] },
+    alerts,
+    vulns
+  };
 }
 
 /* --------------------------------- OpenCTI --------------------------------- */
