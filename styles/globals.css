@@ -352,7 +352,11 @@ footer { margin-top: 36px; font-size: 0.74rem; color: rgba(255,255,255,0.3); dis
 /* Landing hero globe */
 .hero-globe { position: relative; z-index: 1; width: 100%; max-width: 720px; height: 460px; }
 @media (max-width: 768px) { .hero-globe { height: 300px; } }
-.login-demo { margin-top: 10px; }
+.login-demo-group { margin-top: 14px; padding-top: 14px; border-top: 1px dashed rgba(255,255,255,0.14); }
+.login-demo-title { margin: 0 0 8px; font-size: 0.7rem; color: var(--text-muted); text-align: center; letter-spacing: 0.02em; }
+.login-demo-buttons { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.login-demo { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 9px 8px; font-size: 0.82rem; font-weight: 600; color: var(--text); }
+.login-demo small { font-size: 0.58rem; color: var(--text-muted); font-weight: 400; }
 
 /* ============ Full-screen dashboard ============ */
 .dash-page { min-height: 100vh; background: #061312; display: flex; }

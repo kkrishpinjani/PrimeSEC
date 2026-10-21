@@ -35,7 +35,7 @@ Everything that can be finished and verified without your platforms is finished.
 - [x] `NEXTAUTH_SECRET` guard: authentication is refused when the secret is missing or still the placeholder.
 - [x] Renamed to PrimeSEC everywhere user-visible (realm and client IDs `primesoc` / `primesoc-web` intentionally kept, since renaming breaks the import).
 - [x] Frontend on port 3010 (`package.json`, `.env`, realm file, live Keycloak client).
-- [x] "Try the demo" login (opt-in via `DEMO_LOGIN`, refused in production builds, role configurable).
+- [x] Demo login with **one button per role** (Admin / Analyst / Read-only), each its own identity, opt-in via `DEMO_LOGIN`. Verified: roles behave correctly side by side, an unknown or spoofed role never elevates, `DEMO_LOGIN=false` turns it fully off, and a production server ignores `DEMO_LOGIN=true` entirely.
 - [~] `scripts/setup.ps1` / `setup.sh` generate secrets: the PowerShell script was only syntax-checked, neither was run end to end.
 
 ### Wazuh single sign-on (the actual goal of Day 1)

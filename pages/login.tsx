@@ -5,6 +5,7 @@ import { getServerSession } from "next-auth/next";
 import { signIn } from "next-auth/react";
 import { motion } from "framer-motion";
 import { authOptions, demoLoginEnabled } from "../lib/auth";
+import { DEMO_IDENTITIES } from "../lib/demoIdentities";
 import { LogoMark } from "../components/Logo";
 import HeroPipeline from "../components/HeroPipeline";
 
@@ -29,9 +30,17 @@ export default function Login({ demo }: { demo: boolean }) {
             Continue with Keycloak <span aria-hidden="true">→</span>
           </button>
           {demo && (
-            <button className="btn-ghost btn-full login-demo" onClick={() => signIn("demo", { callbackUrl: "/dashboard" })}>
-              Try the demo
-            </button>
+            <div className="login-demo-group">
+              <p className="login-demo-title">Demo sign-in (local only, no Keycloak)</p>
+              <div className="login-demo-buttons">
+                {Object.entries(DEMO_IDENTITIES).map(([role, who]) => (
+                  <button key={role} className="btn-ghost login-demo" title={`Sign in as ${who.name} (${role})`} onClick={() => signIn("demo", { role, callbackUrl: "/dashboard" })}>
+                    {who.label}
+                    <small>{role}</small>
+                  </button>
+                ))}
+              </div>
+            </div>
           )}
           <p className="login-footnote">Protected by centralized authentication (OIDC)</p>
         </motion.div>

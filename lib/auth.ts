@@ -3,6 +3,7 @@ import type { NextAuthOptions } from "next-auth";
 import { getServerSession } from "next-auth/next";
 import KeycloakProvider from "next-auth/providers/keycloak";
 import CredentialsProvider from "next-auth/providers/credentials";
+import { DEMO_IDENTITIES } from "./demoIdentities";
 
 function decodeJwtPayload(token: string): { realm_access?: { roles?: string[] }; iss?: string } {
   try {
@@ -34,6 +35,14 @@ export function demoLoginEnabled(): boolean {
   return process.env.DEMO_LOGIN === "true" && process.env.NODE_ENV !== "production";
 }
 
+/** The requested role if it is one of the three known roles; otherwise DEMO_LOGIN_ROLE, otherwise least privilege. */
+export function resolveDemoRole(requested?: unknown): string {
+  const wanted = typeof requested === "string" ? requested : "";
+  if (wanted in DEMO_IDENTITIES) return wanted;
+  const fallback = process.env.DEMO_LOGIN_ROLE || "";
+  return fallback in DEMO_IDENTITIES ? fallback : "SOC_ReadOnly";
+}
+
 export const authOptions: NextAuthOptions = {
   providers: [
     KeycloakProvider({
@@ -47,10 +56,13 @@ export const authOptions: NextAuthOptions = {
           CredentialsProvider({
             id: "demo",
             name: "Demo",
-            credentials: {},
-            async authorize() {
+            credentials: { role: { label: "Role", type: "text" } },
+            async authorize(credentials) {
               if (!demoLoginEnabled()) return null;
-              return { id: "demo-user", name: "Demo Analyst", email: "demo@primesec.local" };
+              const role = resolveDemoRole(credentials?.role);
+              const who = DEMO_IDENTITIES[role];
+              // Each role is a separate identity, so audit entries and rate limits stay per role.
+              return { id: `demo:${role}`, name: who.name, email: who.email };
             }
           })
         ]
@@ -62,11 +74,10 @@ export const authOptions: NextAuthOptions = {
   session: { strategy: "jwt", maxAge: 8 * 60 * 60 },
   pages: { signIn: "/login" },
   callbacks: {
-    async jwt({ token, account }) {
+    async jwt({ token, account, user }) {
       if (account?.provider === "demo" && demoLoginEnabled()) {
-        // Least-privilege by default; DEMO_LOGIN_ROLE=SOC_Analyst lets a local demo create investigations.
-        const requested = process.env.DEMO_LOGIN_ROLE;
-        token.roles = [requested && PRIMESEC_ROLES.includes(requested) ? requested : "SOC_ReadOnly"];
+        // The role was chosen at sign-in and is carried in the user id ("demo:<role>"); re-validate it here.
+        token.roles = [resolveDemoRole(String(user?.id ?? "").replace(/^demo:/, ""))];
         token.issuer = "demo";
         return token;
       }

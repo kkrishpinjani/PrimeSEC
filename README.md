@@ -51,7 +51,7 @@ npm run dev
 
 The demo settings live under the DEMO headings in `.env` and are marked with `DEMO_INTEGRATIONS=true`, so the dashboard says **Demo data**. Nothing is scanned and nothing touches a network.
 
-`DEMO_LOGIN=true` adds a **Try the demo** button on `/login` that signs in without Keycloak, as the role in `DEMO_LOGIN_ROLE` (default `SOC_ReadOnly`; use `SOC_Analyst` to investigate or `SOC_Admin` to approve scopes). It is for local demos only, is ignored in production builds, and ships as `false` in `.env.example`.
+`DEMO_LOGIN=true` adds three buttons to `/login`, **Admin**, **Analyst** and **Read-only**, that sign in without Keycloak as `SOC_Admin`, `SOC_Analyst` or `SOC_ReadOnly`. Each is a separate identity (`demo-admin@`, `demo-analyst@`, `demo-readonly@primesec.local`), so audit entries and rate limits stay per role and you can switch roles by signing out, with no `.env` edits. The role can only be one of those three; anything else falls back to `DEMO_LOGIN_ROLE` (default `SOC_ReadOnly`). It is for local demos only, is ignored in production builds (a production server refuses it even with `DEMO_LOGIN=true`), and ships as `false` in `.env.example`.
 
 To go real, replace the DEMO lines in `.env` with real URLs and read-only credentials, and set `DEMO_INTEGRATIONS=false`.
 
