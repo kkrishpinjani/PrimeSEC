@@ -1,0 +1,73 @@
+{
+  "realm": "primesoc",
+  "enabled": true,
+  "displayName": "PrimeSEC Identity",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "roles": {
+    "realm": [
+      {
+        "name": "SOC_Admin",
+        "description": "PrimeSEC administrator"
+      },
+      {
+        "name": "SOC_Analyst",
+        "description": "SOC analyst"
+      },
+      {
+        "name": "SOC_ReadOnly",
+        "description": "Read-only security access"
+      },
+      {
+        "name": "wazuh-readonly",
+        "description": "Backend role for Wazuh read-only SSO"
+      },
+      {
+        "name": "wazuh-admins",
+        "description": "Backend role for Wazuh administrators; grant only to approved admins"
+      }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "primesoc-web",
+      "name": "PrimeSEC Web",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "primesoc-local-dev-secret-change-me",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "serviceAccountsEnabled": false,
+      "rootUrl": "http://localhost:3010",
+      "baseUrl": "http://localhost:3010",
+      "redirectUris": [
+        "http://localhost:3010/api/auth/callback/keycloak"
+      ],
+      "webOrigins": [
+        "http://localhost:3010"
+      ],
+      "attributes": {
+        "post.logout.redirect.uris": "http://localhost:3010/login",
+        "pkce.code.challenge.method": "S256"
+      },
+      "protocolMappers": [
+        {
+          "name": "audience-primesoc",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "primesoc-web",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ]
+}

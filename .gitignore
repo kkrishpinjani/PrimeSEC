@@ -1,0 +1,19 @@
+node_modules/
+.next/
+.env
+.env.local
+.env.*.local
+npm-debug.log*
+.DS_Store
+
+# local investigation audit trail (development MVP)
+/data/
+
+# Greenbone bridge test artefacts
+.fake-gvm-state.json
+__pycache__/
+*.pyc
+
+# build artefacts and project-local skill packs (add team skills back deliberately)
+tsconfig.tsbuildinfo
+/.claude/skills/

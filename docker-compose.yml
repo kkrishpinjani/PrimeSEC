@@ -1,0 +1,20 @@
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.3.3
+    container_name: primesoc-keycloak
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-kcadmin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?Set KEYCLOAK_ADMIN_PASSWORD in .env}
+      KC_HEALTH_ENABLED: "true"
+      KC_HTTP_ENABLED: "true"
+      KC_HOSTNAME: http://localhost:8080
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ./realm-import:/opt/keycloak/data/import:ro
+      - keycloak_data:/opt/keycloak/data
+    restart: unless-stopped
+
+volumes:
+  keycloak_data:

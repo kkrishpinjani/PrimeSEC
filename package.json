@@ -1,0 +1,40 @@
+{
+  "name": "primesec",
+  "version": "1.0.0",
+  "private": true,
+  "description": "PrimeSEC: security operations workspace over Wazuh, OpenCTI and Greenbone, with Keycloak SSO, governed investigations and authorized VAPT scans",
+  "scripts": {
+    "dev": "next dev -p 3010",
+    "build": "next build",
+    "start": "next start -p 3010",
+    "lint": "next lint",
+    "demo:integrations": "node scripts/demo-integrations.js",
+    "test:vapt": "node --experimental-strip-types --no-warnings scripts/test-vapt-scope.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "framer-motion": "11.18.2",
+    "next": "15.5.28",
+    "next-auth": "4.24.15",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "three": "0.170.0",
+    "topojson-client": "3.1.0",
+    "world-atlas": "2.0.2"
+  },
+  "devDependencies": {
+    "@types/node": "20.17.10",
+    "@types/react": "18.3.18",
+    "@types/react-dom": "18.3.5",
+    "@types/three": "0.170.0",
+    "@types/topojson-client": "3.1.5",
+    "eslint": "8.57.1",
+    "eslint-config-next": "15.5.28",
+    "typescript": "5.7.2"
+  },
+  "overrides": {
+    "next": {
+      "postcss": "8.5.31"
+    }
+  }
+}
