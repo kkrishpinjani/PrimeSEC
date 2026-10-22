@@ -36,6 +36,8 @@ function describe(e: AuditEvent): { label: string; detail: string; tone: "ok" | 
     case "vapt_findings_synchronized": return { label: "Findings synced", detail: `${e.imported} new, ${e.updated} updated${e.missing ? `, ${e.missing} not in latest scan` : ""}${e.truncated ? " (truncated)" : ""}`, tone: e.truncated ? "warn" : "ok" };
     case "vapt_finding_updated": return { label: "Finding updated", detail: `${e.finding.name} on ${e.finding.host}: ${e.changes.join(", ") || "no change"}${e.status.from !== e.status.to ? ` (${e.status.from} → ${e.status.to})` : ""}`, tone: "ok" };
     case "vapt_finding_retest_requested": return { label: "Retest requested", detail: `${e.finding.name} on ${e.target}`, tone: "ok" };
+    case "vapt_asset_updated": return { label: "Asset context changed", detail: `${e.host}: ${e.changes.map((c) => `${c.field} ${c.from} → ${c.to}`).join(", ") || "no change"}`, tone: "warn" };
+    case "vapt_report_comparison_viewed": return { label: "Reports compared", detail: `${e.summary.fixed} fixed, ${e.summary.stillPresent} still present, ${e.summary.inconclusive} inconclusive`, tone: "ok" };
     default: return { label: "Event", detail: "", tone: "ok" };
   }
 }
@@ -110,6 +112,7 @@ export default function VaptWorkspace({ user, roles }: { user: { name?: string |
         <Link href="/dashboard" className="pv-chip">← Dashboard</Link>
         <span className="pv-chip">Vulnerability assessment (VAPT)</span>
         <Link href="/vapt/findings" className="pv-chip pv-chip-link">Findings &amp; remediation →</Link>
+        <Link href="/risk" className="pv-chip pv-chip-link">Risk &amp; validation →</Link>
         <div className="pv-actions">
           <button className="pv-btn" onClick={() => void load()} disabled={loading}>{loading ? "Checking…" : "↻ Refresh"}</button>
           <button className="pv-btn" onClick={() => void fullSignOut()}>Sign out</button>

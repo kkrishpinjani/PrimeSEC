@@ -37,17 +37,26 @@ const demoHosts = (spec) => {
   if (String(spec).includes("/") && !String(spec).endsWith("/32")) { const [a, b, c] = base.split("."); return [`${a}.${b}.${c}.10`, `${a}.${b}.${c}.11`]; }
   return [base];
 };
+// DEMO_UNREACHABLE=10.50.1.11 makes retest scans report that host as down: a finished scan with no entry and no results for it.
+const DEMO_UNREACHABLE = (process.env.DEMO_UNREACHABLE || "").split(",").map((x) => x.trim()).filter(Boolean);
+const demoReports = () =>
+  [...DEMO_TASKS].reverse().map((task, reportIndex) => {
+    const isRetest = /retest/i.test(task.targetName);
+    const scannedHosts = demoHosts(task.target).filter((h) => !(isRetest && DEMO_UNREACHABLE.includes(h))).sort();
+    return { id: `rep-${task.taskId}`, status: "Done", scannedHosts, timestamp: task.createdAt, reportIndex };
+  });
 const demoFindings = () => {
   const out = [];
   [...DEMO_TASKS].reverse().forEach((task, reportIndex) => {          // newest report first
     const isRetest = /retest/i.test(task.targetName);
     for (const host of demoHosts(task.target)) {
+      if (isRetest && DEMO_UNREACHABLE.includes(host)) continue;       // host down: nothing is reported for it
       for (const [oid, name, port, severity, threat, cves, solution, fixedByRetest] of DEMO_VULNS) {
         if (isRetest && fixedByRetest) continue;
         out.push({
           reportId: `rep-${task.taskId}`, taskName: task.targetName, host, port, name, oid, cves, severity, threat,
           description: `${name} on ${host}. Demo data: no scan was run.`, solution,
-          creationTime: new Date().toISOString(), resultId: `${task.taskId}-${host}-${oid}`, reportIndex
+          creationTime: task.createdAt, resultId: `${task.taskId}-${host}-${oid}`, reportIndex
         });
       }
     }
@@ -226,14 +235,15 @@ function handle(req, res, body) {
       });
     }
     if (url === "/greenbone/v1/findings") {
-      return json(200, { findings: demoFindings(), truncated: false, source: "Demo Greenbone bridge (fake)", retrievedAt: new Date().toISOString() });
+      const reports = demoReports();
+      return json(200, { findings: demoFindings(), truncated: false, reports, completedReports: reports.map((r) => r.id), source: "Demo Greenbone bridge (fake)", retrievedAt: new Date().toISOString() });
     }
     if (url === "/greenbone/v1/assessments" && req.method === "POST") {
       let data = {};
       try { data = JSON.parse(body); } catch { /* ignore */ }
       const id = () => Math.random().toString(16).slice(2, 10) + "-demo";
       const name = String(data.name || "assessment").replace(/[^A-Za-z0-9 ._-]/g, "").slice(0, 60);
-      const task = { targetId: id(), taskId: id(), targetName: `${name} (demo) ${id().slice(0, 4)}`, target: String(data.target || ""), status: "Requested", progress: 0 };
+      const task = { targetId: id(), taskId: id(), targetName: `${name} (demo) ${id().slice(0, 4)}`, target: String(data.target || ""), status: "Requested", progress: 0, createdAt: new Date().toISOString() };
       DEMO_TASKS.push(task);
       return json(201, { ...task, reportId: null, message: "Demo only: no scan was run." });
     }

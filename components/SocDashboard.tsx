@@ -81,7 +81,7 @@ function IntelView({ data }: { data: DashboardData["intel"] }) {
 function VaptView({ items }: { items: DashboardData["vulns"]["items"] }) {
   return (
     <div className="pv-list">
-      <small>Priority queue · <Link href="/vapt" className="pv-link">Run authorized Greenbone scans in the VAPT workspace →</Link> · <Link href="/vapt/findings" className="pv-link">Findings &amp; remediation →</Link></small>
+      <small>Priority queue · <Link href="/vapt" className="pv-link">Run authorized Greenbone scans in the VAPT workspace →</Link> · <Link href="/vapt/findings" className="pv-link">Findings &amp; remediation →</Link> · <Link href="/risk" className="pv-link">Risk &amp; validation →</Link></small>
       {items.map((v) => (
         <div className="pv-row pv-vrow" key={v.host + v.title}>
           <span className={`pv-sev sev-${v.sev.toLowerCase()}`}>{v.sev}</span>

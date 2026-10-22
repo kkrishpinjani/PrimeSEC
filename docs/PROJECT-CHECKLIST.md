@@ -16,6 +16,7 @@ Last verified: 2026-10-21 (including a real Keycloak run and an independent code
 | 3 Investigation | Built, verified on demo data | **No.** Same dependency on real Wazuh/OpenCTI. |
 | 4 Greenbone VAPT | Built, verified on a test double | **No.** Never run against a real Greenbone. |
 | 5 Findings, remediation, retest | Built, verified on a test double and demo bridge | **No.** Never run against a real Greenbone report. |
+| 6 Risk and validation | Built, verified on a test double and demo bridge | **No.** Never run against a real Greenbone report; one input factor has no source. |
 
 Everything that can be finished and verified without your platforms is finished.
 
@@ -138,6 +139,27 @@ Full detail: [day5-checklist.md](day5-checklist.md). It records work; it never c
 - [~] Verified against the `gvm-cli` test double and the demo bridge only.
 - [ ] Greenbone report layout (`details`, `ignore_pagination`, `nvt/refs`, newest-first order) and timeouts confirmed against your Greenbone version (needs your Greenbone).
 - [ ] Day 6 scope, if any (not defined).
+
+---
+
+## Day 6: Risk prioritisation and retest validation
+
+Full detail: [day6-checklist.md](day6-checklist.md). Analysis only: it never scans, changes a host or closes a finding.
+
+- [x] Explainable weighted risk score (5 factors) with **confidence** and a **range**: unknown inputs are never treated as zero.
+- [x] Severity 0.0 (informational) is a known low score, capped at Low. *The original treated it as unknown, so an informational finding on a critical host could outrank real vulnerabilities.*
+- [x] Ranking by score, then the top of the range. Resolved and Closed findings leave the queue. 3,000-input property test: raising severity never lowers a score.
+- [x] Host criticality and exposure stored **once per host** (the original stored them per finding), audited with old and new values, conflict-safe.
+- [x] Exploit evidence is now recorded by analysts (the original read fields nothing ever set, so 25% of the model was permanently unknown).
+- [x] Report snapshots per Greenbone report, including clean (zero-result) scans; a capped import never marks a report complete; finished reports are frozen.
+- [x] Comparison says **Fixed** only for a report Greenbone marked Done that also shows the host was **scanned**. A host that was down is Inconclusive, never Fixed (verified). Matching by stable finding id, not CVE list or name. Nothing is closed automatically (verified).
+- [x] Bridge returns per-report status and hosts scanned (`reports`, `completedReports`); an older bridge degrades safely.
+- [x] `/risk` UI exercised in a real browser: ranking, "why this score?", host context, comparison.
+- [x] 96 new unit tests (240 in total) and 67 new end-to-end checks; every earlier suite and the real-Keycloak runs (21 + 9) still pass.
+- [~] Verified against the `gvm-cli` test double and the demo bridge only.
+- [ ] The "corroborating detection" factor (10%) has no automated source. It stays unknown. (Wazuh could supply it; not built.)
+- [ ] `scan_run_status` and the per-host `<host><ip>/<end>` report entries confirmed against your Greenbone version (needs your Greenbone). If they differ, absence stays inconclusive.
+- [ ] Day 7 scope, if any (not defined).
 
 ---
 

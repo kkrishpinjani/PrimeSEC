@@ -454,3 +454,23 @@ footer { margin-top: 36px; font-size: 0.74rem; color: rgba(255,255,255,0.3); dis
 .fd-meta code { background: none; padding: 0; color: #cdeee9; }
 @media (max-width: 900px) { .fd-tiles { grid-template-columns: 1fr 1fr; } .fd-grid { grid-template-columns: 1fr; } .fd-actions { margin-left: 0; } }
 .pv-chip-link { color: var(--accent); }
+
+/* ============ Risk & validation ============ */
+.rk-host { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; padding: 10px 12px; border-radius: 10px; background: rgba(0,0,0,0.26); font-size: 0.74rem; }
+.rk-host code { font-size: 0.8rem; color: #cdeee9; background: none; padding: 0; min-width: 120px; }
+.rk-host label { display: flex; flex-direction: column; gap: 4px; font-size: 0.64rem; color: var(--text-muted); }
+.rk-muted { color: var(--text-muted); font-size: 0.68rem; }
+.rk-score { font-size: 0.78rem; min-width: 84px; }
+.rk-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; font-size: 0.68rem; color: var(--text-muted); }
+.rk-meta b { color: var(--text); }
+.rk-table { width: 100%; border-collapse: collapse; font-size: 0.7rem; }
+.rk-table th { text-align: left; font-weight: 500; color: var(--text-muted); padding: 5px 8px; border-bottom: 1px solid var(--border); }
+.rk-table td { padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.04); vertical-align: top; }
+.rk-unknown td { color: #fcd34d; }
+.rk-exploit { display: flex; flex-direction: column; gap: 5px; font-size: 0.66rem; color: var(--text-muted); max-width: 520px; }
+.rk-compare { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; }
+.rk-compare label { display: flex; flex-direction: column; gap: 4px; font-size: 0.64rem; color: var(--text-muted); flex: 1 1 320px; }
+.rk-result { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
+.rk-row { display: grid; grid-template-columns: 100px 1.2fr 170px 2fr; gap: 10px; align-items: center; padding: 8px 10px; border-radius: 9px; background: rgba(0,0,0,0.26); font-size: 0.72rem; }
+.rk-row code { background: none; padding: 0; color: #cdeee9; font-size: 0.68rem; }
+@media (max-width: 900px) { .rk-row { grid-template-columns: 1fr; } }

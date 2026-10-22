@@ -55,13 +55,20 @@ def hosts_of(spec):
 
 def build_reports(state):
     fixed = {x for x in os.getenv("FAKE_GVM_FIXED", "").split(",") if x}      # NVT oids a RETEST scan no longer finds
+    status = os.getenv("FAKE_GVM_REPORT_STATUS", "Done")                      # Done | Running | Interrupted ...
+    unreachable = {x for x in os.getenv("FAKE_GVM_UNREACHABLE", "").split(",") if x}  # hosts a RETEST scan could not reach
     reports = []
     for t in reversed(state["tasks"]):                                       # newest report first, like sort-reverse=creation_time
         target = next((x for x in state["targets"] if x["name"] == t["targetName"]), None)
         if target is None:
             continue
         results = []
+        host_entries = []
+        retest = "Retest" in t["name"]
         for host in hosts_of(target["hosts"]):
+            if retest and host in unreachable:
+                continue                                  # host down: no <host> entry and no results, yet the scan is Done
+            host_entries.append(f'<host><ip>{host}</ip><asset asset_id="a-{host}"/><start>2026-10-20T10:00:00Z</start><end>2026-10-20T10:05:00Z</end></host>')
             for oid, name, port, sev, threat, cves, style, solution in VULNS:
                 if oid in fixed and "Retest" in t["name"]:   # older reports of the same host still list it
                     continue
@@ -75,6 +82,7 @@ def build_reports(state):
                 )
         reports.append(
             f'<report id="rep-{t["id"]}"><report id="rep-{t["id"]}"><task id="{t["id"]}"><name>{t["name"]}</name></task>'
+            f'<scan_run_status>{status}</scan_run_status><timestamp>2026-10-20T10:05:00Z</timestamp>{"".join(host_entries)}'
             f'<results start="1" max="1000">{"".join(results)}</results></report></report>'
         )
     return f'<get_reports_response status="200" status_text="OK">{"".join(reports)}</get_reports_response>'

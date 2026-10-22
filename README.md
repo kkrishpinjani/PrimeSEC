@@ -15,6 +15,7 @@ Stack: Next.js 15 (pages router), React 18, TypeScript, NextAuth 4 (Keycloak OID
 | **Investigations** | An **Investigate** button on each live Wazuh alert: re-reads the alert from Wazuh, looks up its IPs/domains/hashes in OpenCTI, shows potential matches for analyst review, and writes an audit event. Read-only: it never blocks or remediates anything. |
 | **VAPT workspace** (`/vapt`) | `SOC_Admin` approves a scope with a written authorization reference and an expiry; scans can start only inside it. Every approval, revocation, launch and refusal is audited. |
 | **Findings** (`/vapt/findings`) | Greenbone results imported and de-duplicated, with remediation status, owner and notes, a retest request, and a "not in latest scan" flag that helps verify fixes. It records work; it never changes a host. |
+| **Risk & validation** (`/risk`) | An explainable risk-ranked remediation queue (with a "why this score?" breakdown, where unknown inputs stay unknown and widen a score range) and a retest comparison that says "fixed" only with proof. Analysis only: it never scans or closes anything. |
 | **Landing page** (`/`) | Public page with the globe. |
 | **Health** (`/api/health`) | Local health check. |
 
@@ -90,8 +91,17 @@ What becomes real once connected:
 - **Retest:** a request for a new authorized scan of the finding's host. It goes through the same scope, audit-before-launch and rate-limit path as any scan, so a host outside an approved scope is refused. Nothing is fixed or changed on the host.
 - **Verifying a fix:** for each host only its most recent report counts as current. A finding that appeared in an older report but is absent from the host's latest one is flagged **Not in latest scan**. That is a hint to review the new report, then resolve; nothing is ever closed automatically.
 - **Audit:** sync, edits (which fields changed, never the note text) and retests are audited. Findings live in `data/vapt-findings.json` (git-ignored), serialised within one server process.
-- Try it with `npm run demo:integrations`: approve a scope, scan it, sync, then request a retest and sync again. The demo retest scan no longer reports the Apache and TLS 1.0 items, so those two get flagged.
+- Try it with `npm run demo:integrations`: approve a scope, scan it, sync, then request a retest and sync again (then open `/risk`). The demo retest scan no longer reports the Apache and TLS 1.0 items, so those two get flagged.
 - Checklist and limits: [docs/day5-checklist.md](docs/day5-checklist.md).
+
+### Risk and validation (Day 6)
+`/risk` ranks open findings by an **explainable weighted score**: severity 30%, exploit evidence 25%, asset criticality 20%, exposure 15%, corroborating detection 10%. It is a triage aid, not a probability of exploitation and not a CVSS replacement.
+
+- **Unknown is not zero.** Missing factors are excluded and the rest renormalised, and each score shows its **confidence** (share of weight that is known) and a **range** (what it could be if every unknown were 0 or 100). Ranking uses the score, then the top of the range.
+- **Informational findings** (severity 0.0) are capped at Low, so host importance alone never makes a non-vulnerability urgent.
+- **Host context** (criticality and exposure) is set once per host by an analyst and applies to every finding on it. **Exploit evidence** is recorded per finding by an analyst (for example from CISA KEV or a vendor advisory). Both are audited. The "corroborating detection" factor has no automated source yet and stays unknown.
+- **Report comparison:** after each Greenbone scan finishes, sync; PrimeSEC keeps a snapshot per report (including clean scans). Comparing a baseline with a retest reports **Fixed** only when the retest report is marked Done by Greenbone **and** shows the host was really scanned; a host that was down yields **Inconclusive**, never Fixed. Matching uses the stable finding id (host, port, NVT), so a renamed NVT or a new CVE does not hide a finding. Nothing is ever closed automatically: resolve findings yourself on the Findings page.
+- The bridge now also returns per-report status and the hosts actually scanned (`reports`, `completedReports`). Checklist and limits: [docs/day6-checklist.md](docs/day6-checklist.md).
 
 ### Wazuh single sign-on
 Wazuh uses SAML; PrimeSEC uses OIDC. They can share the Keycloak realm as separate clients. Set `WAZUH_DASHBOARD_URL` for the header link, then follow the version-matched guide: https://documentation.wazuh.com/current/user-manual/user-administration/single-sign-on/keycloak.html (it cannot be pre-configured without your Wazuh version, URL and certificates).
@@ -108,10 +118,12 @@ Wazuh uses SAML; PrimeSEC uses OIDC. They can share the Keycloak realm as separa
 ## Tests
 
 ```powershell
-npm test            # all unit tests (Node 22.6+): scan-scope rules (40), audit reader + observable extraction (33), findings (71)
+npm test            # all unit tests (Node 22.6+): scan-scope rules (40), audit reader + observable extraction (33), findings (71), risk + assets (55), reports (41)
 npm run test:vapt   # only the scan-scope safety rules
 npm run test:lib    # only the audit reader and the observable extractor
 npm run test:findings  # only findings normalization, sync, remediation and the close rule
+npm run test:risk      # only the risk model and the host asset store
+npm run test:reports   # only report snapshots and the comparison rules
 npx tsc --noEmit
 npm run lint
 npm run build       # do not run while `npm run dev` is running: it corrupts the dev cache
@@ -124,7 +136,7 @@ npm run build       # do not run while `npm run dev` is running: it corrupts the
 - The realm JSON contains a local-only client secret (`primesoc-local-dev-secret-change-me`). Rotate it, and every default password, before any shared deployment.
 - Roles are read once at sign-in and kept for the 8-hour session, so revoking a role in Keycloak takes effect after the user signs out. There is no refresh-token rotation yet.
 - `NEXTAUTH_SECRET` is validated at request time: the app refuses to authenticate with a missing or placeholder secret.
-- Audit events (`data/audit-events.jsonl`), scan scopes (`data/vapt-scopes.json`) and findings (`data/vapt-findings.json`) are local files in the git-ignored `data/` folder. They are not tamper-proof or replicated; use a durable, access-controlled store before production.
+- Audit events (`data/audit-events.jsonl`), scan scopes (`data/vapt-scopes.json`) findings (`data/vapt-findings.json`), host context (`data/vapt-assets.json`) and report snapshots (`data/vapt-report-snapshots.json`) are local files in the git-ignored `data/` folder. They are not tamper-proof or replicated; use a durable, access-controlled store before production.
 - Rate limiting and scope-file write serialisation are per server process. Run a single Next.js process, or move scopes, audit and rate limits into a database first.
 - Errors are logged on the server (`[primesec] ...` lines, never request bodies or credentials) and returned to the browser as generic messages.
 - Never commit `.env` or `bridge/.env`. Use HTTPS and stable hostnames outside local development.

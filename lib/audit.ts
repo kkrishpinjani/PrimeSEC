@@ -41,6 +41,8 @@ export type VaptFindingEvent = Base & (
   | { action: "vapt_findings_synchronized"; imported: number; updated: number; missing: number; total: number; truncated: boolean }
   | { action: "vapt_finding_updated"; finding: { id: string; host: string; port: string; name: string; cves: string[] }; changes: string[]; status: { from: string; to: string } }
   | { action: "vapt_finding_retest_requested"; finding: { id: string; host: string; port: string; name: string }; target: string; taskId: string | null }
+  | { action: "vapt_asset_updated"; host: string; changes: { field: "criticality" | "exposure"; from: string; to: string }[] }
+  | { action: "vapt_report_comparison_viewed"; baselineReportId: string; retestReportId: string; summary: { fixed: number; stillPresent: number; inconclusive: number; new: number } }
 );
 
 export type AuditEvent = InvestigationEvent | VaptScopeEvent | VaptAssessmentEvent | VaptFindingEvent;

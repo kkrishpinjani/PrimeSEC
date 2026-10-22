@@ -10,6 +10,9 @@ import { promises as fs } from "fs";
 import path from "path";
 
 export const STATUSES = ["Open", "In Progress", "Resolved", "Retest Required", "Closed"] as const;
+/** What the analyst knows about exploitation of this vulnerability (for example from CISA KEV or a vendor advisory). */
+export const EXPLOIT_EVIDENCE = ["Unknown", "None known", "Public exploit", "Exploited in the wild"] as const;
+export type ExploitEvidence = (typeof EXPLOIT_EVIDENCE)[number];
 export type FindingStatus = (typeof STATUSES)[number];
 export type FindingSeverity = "Critical" | "High" | "Medium" | "Low" | "Info";
 
@@ -46,6 +49,8 @@ export type Finding = {
   remediationStatus: FindingStatus;
   owner: string;
   remediationNotes: string;
+  /** Input to the risk score. Preserved across syncs like the other analyst fields. */
+  exploitEvidence: ExploitEvidence;
   retestTaskId: string | null;
   retestRequestedAt: string | null;
   updatedAt: string | null;
@@ -106,6 +111,7 @@ export function normalizeFinding(raw: RawFinding, now = new Date().toISOString()
     remediationStatus: "Open",
     owner: "",
     remediationNotes: "",
+    exploitEvidence: "Unknown",
     retestTaskId: null,
     retestRequestedAt: null,
     updatedAt: null,
@@ -133,7 +139,8 @@ function withStore<T>(fn: (items: Finding[]) => Promise<{ items: Finding[]; resu
 export async function readFindings(): Promise<Finding[]> {
   try {
     const value = JSON.parse(await fs.readFile(storePath(), "utf8"));
-    return Array.isArray(value) ? (value as Finding[]) : [];
+    // Records written before a field existed get its safe default instead of "undefined".
+    return Array.isArray(value) ? (value as Finding[]).map((f) => ({ ...f, exploitEvidence: f.exploitEvidence ?? "Unknown" })) : [];
   } catch (error) {
     if ((error as NodeJS.ErrnoException)?.code === "ENOENT") return [];
     throw error;
@@ -197,6 +204,7 @@ export async function syncFindings(raws: RawFinding[], opts: { truncated?: boole
           remediationStatus: previous.remediationStatus,
           owner: previous.owner,
           remediationNotes: previous.remediationNotes,
+          exploitEvidence: previous.exploitEvidence,
           retestTaskId: previous.retestTaskId,
           retestRequestedAt: previous.retestRequestedAt,
           updatedAt: previous.updatedAt,
@@ -222,7 +230,7 @@ export async function syncFindings(raws: RawFinding[], opts: { truncated?: boole
 
 /* ---------------------------------- updates --------------------------------- */
 
-export type Patch = { remediationStatus?: unknown; owner?: unknown; remediationNotes?: unknown; expectedUpdatedAt?: unknown };
+export type Patch = { remediationStatus?: unknown; owner?: unknown; remediationNotes?: unknown; exploitEvidence?: unknown; expectedUpdatedAt?: unknown };
 export class FindingError extends Error {
   code: "NOT_FOUND" | "INVALID" | "CONFLICT" | "FORBIDDEN";
   constructor(message: string, code: "NOT_FOUND" | "INVALID" | "CONFLICT" | "FORBIDDEN") {
@@ -252,6 +260,11 @@ export async function updateFinding(id: string, patch: Patch, actor: { email?: s
       if (!STATUSES.includes(patch.remediationStatus as FindingStatus)) throw new FindingError(`Invalid remediation status. Allowed: ${STATUSES.join(", ")}.`, "INVALID");
       status = patch.remediationStatus as FindingStatus;
     }
+    let exploitEvidence = current.exploitEvidence;
+    if (patch.exploitEvidence !== undefined) {
+      if (!EXPLOIT_EVIDENCE.includes(patch.exploitEvidence as ExploitEvidence)) throw new FindingError(`Invalid exploit evidence. Allowed: ${EXPLOIT_EVIDENCE.join(", ")}.`, "INVALID");
+      exploitEvidence = patch.exploitEvidence as ExploitEvidence;
+    }
     const owner = patch.owner === undefined ? current.owner : text(patch.owner, MAX_OWNER);
     const notes = patch.remediationNotes === undefined ? current.remediationNotes : text(patch.remediationNotes, MAX_NOTES);
     if (status === "Closed" && current.remediationStatus !== "Closed") {
@@ -264,7 +277,7 @@ export async function updateFinding(id: string, patch: Patch, actor: { email?: s
         );
       }
     }
-    const updated: Finding = { ...current, remediationStatus: status, owner, remediationNotes: notes, updatedAt: new Date().toISOString(), updatedBy: actor.email || actor.name || "unknown" };
+    const updated: Finding = { ...current, remediationStatus: status, owner, remediationNotes: notes, exploitEvidence, updatedAt: new Date().toISOString(), updatedBy: actor.email || actor.name || "unknown" };
     const next = items.slice();
     next[index] = updated;
     return { items: next, result: updated };

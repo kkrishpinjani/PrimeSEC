@@ -183,13 +183,48 @@ def parse_findings(root, max_findings=None):
     return findings, False
 
 
+def parse_reports(root):
+    """Per-report completeness metadata from get_reports(details=1).
+
+    A report is 'complete' only when Greenbone itself says its scan finished (scan_run_status == Done). Even then, a
+    host that was down or unreachable produces a Done report with NO results for it, so PrimeSEC also needs to know
+    which hosts were really scanned: only hosts that have a finished <host> entry (with an <end> time) are listed.
+    If the layout has no host entries, scannedHosts is null and PrimeSEC stays conservative (inconclusive).
+    """
+    reports = []
+    outers = root.findall("report") or list(root.iter("report"))
+    for report_index, outer in enumerate(outers):
+        inner = outer.find("report") if outer.find("report") is not None else outer
+        report_id = inner.attrib.get("id", "") or outer.attrib.get("id", "")
+        if not report_id:
+            continue
+        status = text(inner, "scan_run_status") or text(outer, "scan_run_status") or "Unknown"
+        host_entries = inner.findall("host")
+        scanned = None
+        if host_entries:
+            scanned = sorted({text(h, "ip") for h in host_entries if text(h, "ip") and text(h, "end")})
+        reports.append({
+            "id": report_id,
+            "status": status,
+            "scannedHosts": scanned,
+            "timestamp": text(inner, "timestamp") or text(inner, "creation_time") or text(outer, "creation_time"),
+            "reportIndex": report_index,
+        })
+    return reports
+
+
 def get_findings():
     # ignore_pagination: read every result of each report, not just the first page (checked against the GMP docs, not a live Greenbone)
     reports = cmd(f'<get_reports filter="rows={REPORT_ROWS} sort-reverse=creation_time" details="1" ignore_pagination="1"/>')
     findings, truncated = parse_findings(reports)
+    metadata = parse_reports(reports)
     return {
         "findings": findings,
         "truncated": truncated,
+        "reports": metadata,
+        # Contract with PrimeSEC: only reports Greenbone marked Done, and only when the import was not capped (a capped
+        # import may be missing results, so no report in it can be called complete).
+        "completedReports": [] if truncated else [r["id"] for r in metadata if r["status"] == "Done"],
         "source": "Greenbone GMP",
         "retrievedAt": datetime.datetime.now(datetime.timezone.utc).isoformat(),
     }

@@ -12,8 +12,10 @@
     "test:vapt": "node --experimental-strip-types --no-warnings scripts/test-vapt-scope.mjs",
     "typecheck": "tsc --noEmit",
     "test:lib": "node --experimental-strip-types --no-warnings scripts/test-lib.mjs",
-    "test": "npm run test:vapt && npm run test:lib && npm run test:findings",
-    "test:findings": "node --experimental-strip-types --no-warnings scripts/test-findings.mjs"
+    "test": "npm run test:vapt && npm run test:lib && npm run test:findings && npm run test:risk && npm run test:reports",
+    "test:findings": "node --experimental-strip-types --no-warnings scripts/test-findings.mjs",
+    "test:risk": "node --experimental-strip-types --no-warnings scripts/test-risk.mjs",
+    "test:reports": "node --experimental-strip-types --no-warnings scripts/test-reports.mjs"
   },
   "dependencies": {
     "framer-motion": "11.18.2",

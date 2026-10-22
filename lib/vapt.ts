@@ -263,7 +263,15 @@ export async function launchVaptAssessment(input: { target: string; name?: unkno
 // Reading every result of the recent reports can take far longer than a status read.
 const syncTimeout = () => Number(process.env.GREENBONE_SYNC_TIMEOUT_MS || 60000);
 
-export type BridgeFindings = { findings: RawFinding[]; truncated: boolean; retrievedAt: string };
+export type BridgeFindings = {
+  findings: RawFinding[];
+  truncated: boolean;
+  retrievedAt: string;
+  /** Per-report metadata from Greenbone (status, hosts actually scanned). Absent on an older bridge. */
+  reports: { id?: unknown; status?: unknown; scannedHosts?: unknown; timestamp?: unknown }[];
+  /** Report ids the bridge confirms finished. Absent on an older bridge: nothing can then be called complete. */
+  completedReports: string[];
+};
 
 /** Recent report results from Greenbone via the bridge (read-only). */
 export async function getBridgeFindings(): Promise<BridgeFindings> {
@@ -271,6 +279,8 @@ export async function getBridgeFindings(): Promise<BridgeFindings> {
   return {
     findings: Array.isArray(data.findings) ? data.findings : [],
     truncated: Boolean(data.truncated),
-    retrievedAt: typeof data.retrievedAt === "string" ? data.retrievedAt : new Date().toISOString()
+    retrievedAt: typeof data.retrievedAt === "string" ? data.retrievedAt : new Date().toISOString(),
+    reports: Array.isArray(data.reports) ? data.reports : [],
+    completedReports: Array.isArray(data.completedReports) ? data.completedReports.map(String) : []
   };
 }

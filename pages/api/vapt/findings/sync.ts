@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth/next";
 import { authOptions, originIsAllowed } from "../../../../lib/auth";
 import { getBridgeFindings } from "../../../../lib/vapt";
 import { syncFindings } from "../../../../lib/findings";
+import { captureSnapshots } from "../../../../lib/reports";
 import { writeAuditEvent } from "../../../../lib/audit";
 import { allowRequest } from "../../../../lib/rateLimit";
 import { logError } from "../../../../lib/log";
@@ -37,6 +38,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     const result = await syncFindings(remote.findings, { truncated: remote.truncated });
+    let snapshots = 0;
+    try {
+      snapshots = (await captureSnapshots(remote.findings, { reports: remote.reports, completedReports: remote.completedReports, truncated: remote.truncated })).captured;
+    } catch (error) {
+      logError("findings sync: report snapshots could not be stored (findings were still imported)", error);
+    }
     let auditRecorded = true;
     try {
       await writeAuditEvent({
@@ -49,7 +56,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
     return res.status(200).json({
       imported: result.imported, updated: result.updated, missing: result.missing, total: result.findings.length,
-      truncated: result.truncated, retrievedAt: remote.retrievedAt, auditRecorded
+      truncated: result.truncated, retrievedAt: remote.retrievedAt, snapshots, auditRecorded
     });
   } catch (error) {
     logError("findings sync: storing findings", error);

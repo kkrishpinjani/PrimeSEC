@@ -99,6 +99,7 @@ export default function FindingsWorkspace({ user, roles }: { user: { name?: stri
       <div className="pv-top">
         <span className="pv-logo"><LogoMark size={18} /></span>
         <Link href="/vapt" className="pv-chip">← VAPT workspace</Link>
+        <Link href="/risk" className="pv-chip pv-chip-link">Risk &amp; validation →</Link>
         <span className="pv-chip">Findings &amp; remediation</span>
         <div className="pv-actions">
           {canEdit && <button className="pv-btn pv-btn-primary" onClick={() => void sync()} disabled={busy !== ""}>{busy === "sync" ? "Syncing…" : "Sync Greenbone findings"}</button>}

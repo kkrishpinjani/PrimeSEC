@@ -24,7 +24,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   // Whitelist: nothing but these four keys ever reaches the store, whatever the client sends.
   const body = (req.body ?? {}) as Record<string, unknown>;
   const patch: Patch = {};
-  for (const key of ["remediationStatus", "owner", "remediationNotes", "expectedUpdatedAt"] as const) if (key in body) patch[key] = body[key];
+  for (const key of ["remediationStatus", "owner", "remediationNotes", "exploitEvidence", "expectedUpdatedAt"] as const) if (key in body) patch[key] = body[key];
 
   const actor = { name: session.user?.name ?? null, email: session.user?.email ?? null, roles };
   try {
@@ -32,7 +32,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const finding = await updateFinding(id, patch, actor);
     let auditRecorded = true;
     try {
-      const changes = (["remediationStatus", "owner", "remediationNotes"] as const).filter((k) => before && before[k] !== finding[k]);
+      const changes = (["remediationStatus", "owner", "remediationNotes", "exploitEvidence"] as const).filter((k) => before && before[k] !== finding[k]);
       await writeAuditEvent({
         action: "vapt_finding_updated", actor,
         finding: { id: finding.id, host: finding.host, port: finding.port, name: finding.name, cves: finding.cves },

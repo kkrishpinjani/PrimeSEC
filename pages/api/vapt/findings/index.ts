@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getServerSession } from "next-auth/next";
 import { authOptions, PRIMESEC_ROLES } from "../../../../lib/auth";
-import { readFindings, STATUSES } from "../../../../lib/findings";
+import { EXPLOIT_EVIDENCE, readFindings, STATUSES } from "../../../../lib/findings";
 import { logError } from "../../../../lib/log";
 
 /** Read-only list of the locally stored, normalized findings (any PrimeSEC role). Syncing is a separate POST. */
@@ -23,6 +23,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       findings,
       summary: { total: findings.length, bySeverity: count((f) => f.severity), byStatus: count((f) => f.remediationStatus), notInLatestSync: findings.filter((f) => f.notInLatestSync).length },
       statuses: STATUSES,
+      exploitEvidenceOptions: EXPLOIT_EVIDENCE,
       canEdit: roles.some((r) => ["SOC_Admin", "SOC_Analyst"].includes(r)),
       isAdmin: roles.includes("SOC_Admin")
     });
