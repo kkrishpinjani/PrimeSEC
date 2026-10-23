@@ -1,0 +1,402 @@
+{
+  "uid": "primesec-reliability",
+  "title": "PrimeSEC - Reliability & SLOs",
+  "tags": [
+    "primesec",
+    "soc",
+    "observability",
+    "slo"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "blue",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Integration calls / second",
+      "type": "timeseries",
+      "description": "Requires traffic after the Day 8 instrumented app starts.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "primesec-prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (primesec_integration, primesec_outcome) (rate(primesec_integration_calls_total[5m]))",
+          "legendFormat": "{{primesec_integration}} {{primesec_outcome}}",
+          "range": true,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "primesec-prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "Integration errors / second",
+      "type": "timeseries",
+      "description": "Errors emitted by instrumented integration calls.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "primesec-prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (primesec_integration) (rate(primesec_integration_errors_total[5m]))",
+          "legendFormat": "{{primesec_integration}} {{primesec_outcome}}",
+          "range": true,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "primesec-prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "title": "Integration p95 latency",
+      "type": "timeseries",
+      "description": "Metric name may be normalized by the Collector exporter; verify in Prometheus if empty.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "primesec-prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(primesec_integration_duration_milliseconds_bucket[5m])))",
+          "legendFormat": "{{primesec_integration}} {{primesec_outcome}}",
+          "range": true,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "primesec-prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 4,
+      "title": "Integration error ratio",
+      "type": "timeseries",
+      "description": "Ratio is meaningful only when there is call traffic.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "primesec-prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "(sum(rate(primesec_integration_errors_total[5m])) or vector(0)) / clamp_min(sum(rate(primesec_integration_calls_total[5m])), 0.001)",
+          "legendFormat": "{{primesec_integration}} {{primesec_outcome}}",
+          "range": true,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "primesec-prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 5,
+      "title": "Collector scrape health",
+      "type": "stat",
+      "description": "1 means Prometheus can scrape Collector-exported metrics.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "primesec-prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "up{job=\"primesec-app-metrics\"}",
+          "legendFormat": "{{job}}",
+          "range": true,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "primesec-prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bool",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 6,
+      "title": "Firing alert rules",
+      "type": "timeseries",
+      "description": "Shows firing alert series when the rules are loaded and firing.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "primesec-prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "ALERTS{alertstate=\"firing\"}",
+          "legendFormat": "{{job}}",
+          "range": true,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "primesec-prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    }
+  ]
+}

@@ -167,3 +167,12 @@ docker compose --profile observe up -d jaeger otel-collector prometheus
 ```
 
 Then open `/observe` (reachability of Collector, Jaeger and Prometheus), Jaeger at http://localhost:16686 (service `primesec-web`) and Prometheus at http://localhost:9090 (`primesec_integration_calls_total`). Telemetry is off unless `OTEL_ENABLED=true`, never leaves the machine unless `OTEL_ALLOW_REMOTE=true`, and carries no URLs, hosts, tokens, prompts or finding details. See [docs/day8-checklist.md](docs/day8-checklist.md).
+
+## Day 9: Reliability dashboards and alert rules
+
+`docker compose --profile observe up -d` also starts Grafana on http://localhost:3001 (set `GRAFANA_ADMIN_PASSWORD` in `.env` first; there is no default). It provisions a "PrimeSEC - Reliability & SLOs" dashboard, and Prometheus loads five starter alert rules. Nothing is sent anywhere when an alert fires: no notification receiver is configured. See [docs/day9-checklist.md](docs/day9-checklist.md).
+
+## Days 10-12: Agent security (`/agents`)
+
+A manual registry of AI agents, restrictive-only policies and a deterministic evaluator that returns ALLOW / REVIEW / REQUIRE_APPROVAL / DENY for a proposed agent action. It decides but does not enforce: it only protects anything if the system running the agent asks first and obeys. Registering agents and changing policies is SOC_Admin only. See [docs/day10-12-checklist.md](docs/day10-12-checklist.md).
+

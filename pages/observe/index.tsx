@@ -4,7 +4,7 @@ import { getServerSession } from "next-auth/next";
 import { authOptions, PRIMESEC_ROLES } from "../../lib/auth";
 import ObserveWorkspace from "../../components/ObserveWorkspace";
 
-type Props = { user: { name?: string | null; email?: string | null }; roles: string[]; jaegerUrl: string; prometheusUrl: string };
+type Props = { user: { name?: string | null; email?: string | null }; roles: string[]; jaegerUrl: string; prometheusUrl: string; grafanaUrl: string };
 
 export default function Observe(props: Props) {
   return (
@@ -31,7 +31,8 @@ export const getServerSideProps: GetServerSideProps<Props> = async (context) => 
     props: {
       user: { name: session.user?.name ?? null, email: session.user?.email ?? null }, roles,
       jaegerUrl: safe(process.env.JAEGER_QUERY_URL_BROWSER, "http://localhost:16686"),
-      prometheusUrl: safe(process.env.PROMETHEUS_URL_BROWSER, "http://localhost:9090")
+      prometheusUrl: safe(process.env.PROMETHEUS_URL_BROWSER, "http://localhost:9090"),
+      grafanaUrl: safe(process.env.GRAFANA_URL_BROWSER, "http://localhost:3001")
     }
   };
 };

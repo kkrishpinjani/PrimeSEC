@@ -191,6 +191,16 @@ Full detail: [day6-checklist.md](day6-checklist.md). Analysis only: it never sca
 - [x] Fixes over the supplied package: opt-in instead of default-on; loopback-only collector unless allowed; bounded labels; collector redaction; mismatched and vulnerable package versions; a collector image tag that no longer exists; a config option removed from current collectors; backend ports no longer published.
 - [ ] No log export, Grafana dashboards, alerts or SLOs; Jaeger is in-memory; no TLS/auth to telemetry backends.
 
+## Day 9: Reliability dashboards and alert rules
+- [x] Grafana (loopback, no default password) with a provisioned dashboard whose panels all evaluate; five Prometheus alert rules validated and tested against a real failure; alert summary on `/observe`. 27 end-to-end checks.
+- [x] Fixes over the supplied package: dashboard and rules used metric and label names this app does not produce; the error-rate rule returned no data when there were no errors; unauthenticated Prometheus reload endpoint removed.
+- [ ] No Alertmanager or notification receiver (nothing is sent when an alert fires); thresholds are examples; no real SLO/error-budget calculation.
+
+## Days 10-12: Agent security
+- [x] `/agents`: manual agent registry, restrictive-only policies, deterministic evaluator, kill-switch suspend, deduplicated findings, scenario suite, audit trail. 58 unit tests (incl. a 4,000-case fail-closed property test) and 61 end-to-end checks.
+- [x] Fixes over the supplied package: policies could shadow stricter ones and disabling one failed open; analysts could grant agents tools or disable policies (now SOC_Admin only); findings flooded on repeats; the test suite wrote findings; second log file replaced by the audit log.
+- [ ] Decides but does not enforce; no live discovery, approval queue, or real agent runtime connected; sensitivity is keyword-based.
+
 ### Decisions and housekeeping that need you
 - [~] **Port 8010 identified:** it is your **AgenticOS** FastAPI backend (`new project langdiify/backend` on your Desktop; routers for auth, agents, workflows, approvals, knowledge, memory, audit, billing, graph and evaluation; `/docs`, `/api/system/health`). It was not running when checked. **PrimeSEC does not call it**: all Wazuh/OpenCTI/Greenbone access goes straight from Next.js server-side.
 - [ ] Decide what PrimeSEC should use the 8010 backend for (for example agent-assisted alert triage, a shared sign-in, or shared audit) before any integration is built.

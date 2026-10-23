@@ -12,12 +12,13 @@
     "test:vapt": "node --experimental-strip-types --no-warnings scripts/test-vapt-scope.mjs",
     "typecheck": "tsc --noEmit",
     "test:lib": "node --experimental-strip-types --no-warnings scripts/test-lib.mjs",
-    "test": "npm run test:vapt && npm run test:lib && npm run test:findings && npm run test:risk && npm run test:reports && npm run test:demodata && npm run test:cyberreasoner && npm run test:telemetry",
+    "test": "npm run test:vapt && npm run test:lib && npm run test:findings && npm run test:risk && npm run test:reports && npm run test:demodata && npm run test:cyberreasoner && npm run test:telemetry && npm run test:agentsec",
     "test:findings": "node --experimental-strip-types --no-warnings scripts/test-findings.mjs",
     "test:risk": "node --experimental-strip-types --no-warnings scripts/test-risk.mjs",
     "test:demodata": "node --experimental-strip-types --no-warnings scripts/test-demodata.mjs",
     "test:cyberreasoner": "node --experimental-strip-types --no-warnings scripts/test-cyberreasoner.mjs",
     "test:telemetry": "node --experimental-strip-types --no-warnings scripts/test-telemetry.mjs",
+    "test:agentsec": "node --experimental-strip-types --no-warnings scripts/test-agentsec.mjs",
     "test:reports": "node --experimental-strip-types --no-warnings scripts/test-reports.mjs"
   },
   "dependencies": {

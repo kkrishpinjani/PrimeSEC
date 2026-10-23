@@ -284,6 +284,7 @@ export default function SocDashboard({ data, user, roles, wazuhUrl, onSignOut }:
           <Link href="/vapt" className="pv-btn">VAPT ↗</Link>
           <Link href="/risk" className="pv-btn pv-hide">Risk ↗</Link>
           <Link href="/cyberreasoner" className="pv-btn pv-hide">CyberReasoner ↗</Link>
+          <Link href="/agents" className="pv-btn pv-hide">Agent security ↗</Link>
           <Link href="/observe" className="pv-btn pv-hide">Observe ↗</Link>
           {wazuhUrl
             ? <a className="pv-btn" href={wazuhUrl} target="_blank" rel="noreferrer">Open Wazuh ↗</a>

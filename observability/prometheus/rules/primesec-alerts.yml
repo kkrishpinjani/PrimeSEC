@@ -1,0 +1,56 @@
+# Starter alert rules for PrimeSEC. They are evaluated by Prometheus and shown on its Alerts page.
+# No notification receiver is configured (that needs Alertmanager and an approved destination), so nothing is sent anywhere.
+# Thresholds are examples: tune them against real traffic before treating them as commitments.
+groups:
+  - name: primesec-observability
+    interval: 30s
+    rules:
+      - alert: PrimeSECAppMetricsScrapeDown
+        expr: up{job="primesec-app-metrics"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: primesec-observability
+        annotations:
+          summary: "PrimeSEC application metrics cannot be scraped"
+          description: "Prometheus cannot scrape the OpenTelemetry Collector's exported-metrics endpoint. Check the collector container."
+      - alert: PrimeSECPrometheusSelfScrapeDown
+        expr: up{job="prometheus"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: primesec-observability
+        annotations:
+          summary: "Prometheus self-scrape is failing"
+          description: "Prometheus has failed to scrape itself for at least 2 minutes."
+  - name: primesec-integrations
+    interval: 30s
+    rules:
+      - alert: PrimeSECIntegrationErrorRateHigh
+        # "or vector(0)": with no failures there is no errors series at all, which must read as a ratio of 0, not "no data".
+        expr: (sum(rate(primesec_integration_errors_total[5m])) or vector(0)) / clamp_min(sum(rate(primesec_integration_calls_total[5m])), 0.001) > 0.10
+        for: 5m
+        labels:
+          severity: warning
+          service: primesec-integrations
+        annotations:
+          summary: "More than 10% of integration calls are failing"
+          description: "Over 5 minutes, more than 10% of Wazuh, OpenCTI, Greenbone or Ollama calls failed. Open Jaeger and filter the primesec-web service by error=true."
+      - alert: PrimeSECIntegrationLatencyP95High
+        expr: histogram_quantile(0.95, sum by (le) (rate(primesec_integration_duration_milliseconds_bucket[5m]))) > 5000
+        for: 10m
+        labels:
+          severity: warning
+          service: primesec-integrations
+        annotations:
+          summary: "Integration p95 latency is above 5 seconds"
+          description: "Estimated p95 duration of outbound calls has exceeded 5 seconds for 10 minutes. Local AI analysis and scan launches are slow by nature; consider per-integration thresholds."
+      - alert: PrimeSECNoIntegrationTraffic
+        expr: absent(primesec_integration_calls_total)
+        for: 15m
+        labels:
+          severity: info
+          service: primesec-integrations
+        annotations:
+          summary: "No integration metrics seen for 15 minutes"
+          description: "No integration-call metric has been scraped. Expected on an idle development machine, or when OTEL_ENABLED is not true."
