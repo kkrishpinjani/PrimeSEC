@@ -179,6 +179,18 @@ Full detail: [day6-checklist.md](day6-checklist.md). Analysis only: it never sca
 - [x] Real Keycloak login retest after the Next 15 / next-auth 4.24.15 upgrade and after the review fixes (21 role/flow checks + 9 sign-out checks, all passing).
 - [x] Independent code review of the Day 2 to Day 4 code (see above).
 
+## Day 7: CyberReasoner (local defensive analysis)
+- [x] `/cyberreasoner`: analysis of one imported finding by a local Ollama model, plus a fixed workflow proposal. Takes only a finding id; SOC_Analyst/SOC_Admin; origin-checked, rate-limited, one run at a time, audited.
+- [x] Fixes over the supplied package: finding data cannot leave the machine unless `OLLAMA_ALLOW_REMOTE=true`; redirects refused; model output strictly validated (the original crashed on `null`), capped and screened; upstream error text not leaked; asset context read from PrimeSEC's own stores (the original read fields that did not exist); concurrency lock.
+- [x] 55 unit tests (fake Ollama), 25 API checks, and one real run on `qwen2.5:7b` (about 20 s warm; the first call after a cold load took over 90 s, so the default timeout is 180 s).
+- [ ] JEV: the plan is a proposal only; no connection (the API contract was not supplied) and it is not stored.
+- [ ] Output quality of a 7B model on real findings is unreviewed: treat as a drafting aid.
+
+## Day 8: Observability (OpenTelemetry)
+- [x] Opt-in tracing and metrics (`OTEL_ENABLED=true`) to a local Collector, Jaeger and Prometheus; spans and metrics for Wazuh, OpenCTI, Greenbone bridge and Ollama calls; `/observe` page. Verified live: 26 end-to-end checks, 23 unit tests, collector-down behaviour, query-string redaction.
+- [x] Fixes over the supplied package: opt-in instead of default-on; loopback-only collector unless allowed; bounded labels; collector redaction; mismatched and vulnerable package versions; a collector image tag that no longer exists; a config option removed from current collectors; backend ports no longer published.
+- [ ] No log export, Grafana dashboards, alerts or SLOs; Jaeger is in-memory; no TLS/auth to telemetry backends.
+
 ### Decisions and housekeeping that need you
 - [~] **Port 8010 identified:** it is your **AgenticOS** FastAPI backend (`new project langdiify/backend` on your Desktop; routers for auth, agents, workflows, approvals, knowledge, memory, audit, billing, graph and evaluation; `/docs`, `/api/system/health`). It was not running when checked. **PrimeSEC does not call it**: all Wazuh/OpenCTI/Greenbone access goes straight from Next.js server-side.
 - [ ] Decide what PrimeSEC should use the 8010 backend for (for example agent-assisted alert triage, a shared sign-in, or shared audit) before any integration is built.

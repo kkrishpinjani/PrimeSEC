@@ -16,5 +16,58 @@ services:
       - keycloak_data:/opt/keycloak/data
     restart: unless-stopped
 
+  # Optional local model server for CyberReasoner: `docker compose --profile ai up -d ollama`. Loopback only.
+  ollama:
+    image: ollama/ollama:latest
+    container_name: primesec-ollama
+    profiles: ["ai"]
+    ports:
+      - "127.0.0.1:11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
+
+  # ---- Day 8 observability (opt-in): docker compose --profile observe up -d ----
+  # Nothing is published except on 127.0.0.1. Jaeger here is in-memory (traces are lost on restart).
+  jaeger:
+    image: jaegertracing/all-in-one:1.62.0
+    container_name: primesec-jaeger
+    profiles: ["observe"]
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "127.0.0.1:16686:16686"
+    restart: unless-stopped
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.140.0
+    container_name: primesec-otel-collector
+    profiles: ["observe"]
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    volumes:
+      - ./observability/otel-collector.yaml:/etc/otelcol-contrib/config.yaml:ro
+    ports:
+      - "127.0.0.1:4318:4318"
+      - "127.0.0.1:13133:13133"
+    depends_on:
+      - jaeger
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: primesec-prometheus
+    profiles: ["observe"]
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.retention.time=7d"]
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+    depends_on:
+      - otel-collector
+    restart: unless-stopped
+
 volumes:
   keycloak_data:
+  ollama_data:
+  prometheus_data:

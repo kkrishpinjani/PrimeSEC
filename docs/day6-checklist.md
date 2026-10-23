@@ -52,3 +52,9 @@ This is analysis only. It scores and compares; it never scans, never changes a h
 - Two inputs (host context, exploit evidence) are typed in by people, so they can be wrong or stale. Changes are audited, but not otherwise reviewed or approved.
 - "Fixed" proves only that a finished scan that reached the host did not report the finding. A scan can miss a vulnerability (credentials, filtering, scan configuration); review the new report before resolving.
 - Snapshots, assets and findings are local files serialised within one server process (see Day 5).
+
+## Sample data and delete (added after Day 6)
+- [x] **Load sample data** (Findings page, SOC_Admin, only while `DEMO_LOGIN=true`; refused in a production build): 12 labelled "(sample)" findings on three hosts, a baseline report and a retest of one host, host context, exploit evidence and owners. It goes through the real sync/snapshot code, so `/risk` shows the real ranking and a comparison of 2 fixed / 2 still present / 8 inconclusive. It makes no network call and creates **no scan scope**: a retest of a sample finding still needs a real approved scope.
+- [x] **Delete all findings data** (SOC_Admin, any environment, needs `{"confirm":"DELETE"}`): removes findings, host context and report snapshots. Scopes and the audit log are kept. Greenbone is untouched, so findings it still reports come back on the next sync.
+- [x] **Delete** on a single finding (SOC_Admin). Removes its remediation history; audited with host, port and name (never notes).
+- [x] Audited as `vapt_demo_data_seeded`, `vapt_finding_deleted`, `vapt_data_cleared`. 22 unit tests (`npm run test:demodata`) and 28 API checks (roles, origin, confirm, 409 on double seed).

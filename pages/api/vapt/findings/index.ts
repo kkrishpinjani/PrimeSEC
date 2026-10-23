@@ -1,6 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getServerSession } from "next-auth/next";
-import { authOptions, PRIMESEC_ROLES } from "../../../../lib/auth";
+import { authOptions, demoLoginEnabled, PRIMESEC_ROLES } from "../../../../lib/auth";
 import { EXPLOIT_EVIDENCE, readFindings, STATUSES } from "../../../../lib/findings";
 import { logError } from "../../../../lib/log";
 
@@ -25,7 +25,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       statuses: STATUSES,
       exploitEvidenceOptions: EXPLOIT_EVIDENCE,
       canEdit: roles.some((r) => ["SOC_Admin", "SOC_Analyst"].includes(r)),
-      isAdmin: roles.includes("SOC_Admin")
+      isAdmin: roles.includes("SOC_Admin"),
+      demoDataAvailable: demoLoginEnabled()
     });
   } catch (error) {
     logError("findings: reading the findings store", error);

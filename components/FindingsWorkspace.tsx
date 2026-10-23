@@ -5,7 +5,7 @@ import { fullSignOut } from "../lib/signOutClient";
 import type { Finding, FindingStatus } from "../lib/findings";
 
 type Summary = { total: number; bySeverity: Record<string, number>; byStatus: Record<string, number>; notInLatestSync: number };
-type Payload = { findings: Finding[]; summary: Summary; statuses: FindingStatus[]; canEdit: boolean; isAdmin: boolean };
+type Payload = { findings: Finding[]; summary: Summary; statuses: FindingStatus[]; canEdit: boolean; isAdmin: boolean; demoDataAvailable?: boolean };
 type Draft = { status: FindingStatus; owner: string; notes: string };
 
 const SEVERITIES = ["Critical", "High", "Medium", "Low", "Info"] as const;
@@ -75,6 +75,18 @@ export default function FindingsWorkspace({ user, roles }: { user: { name?: stri
       `Retest started for ${f.host} (task ${b.assessment.taskId}). Sync again once the scan has finished to see whether this finding is gone.${b.warning ? " " + b.warning : ""}`);
   };
 
+  const seed = () => call("seed", "/api/vapt/demo-data", { method: "POST" }, (b) =>
+    `Loaded sample data: ${b.findings} findings across ${b.hosts} hosts and ${b.reports} reports (a baseline and a retest). It is labelled "sample" and was made without scanning anything.`);
+  const clearAll = () => {
+    if (!window.confirm("Delete ALL findings, host context and report snapshots?\n\nScopes and the audit log are kept. Greenbone itself is not touched: findings still reported there return on the next sync.")) return;
+    void call("clear", "/api/vapt/demo-data", { method: "DELETE", body: JSON.stringify({ confirm: "DELETE" }) }, (b) =>
+      `Deleted ${b.findings} findings, ${b.assets} host contexts and ${b.reports} report snapshots.`);
+  };
+  const remove = (f: Finding) => {
+    if (!window.confirm(`Delete this finding?\n\n${f.name} on ${f.host}\n\nIts status, owner and notes are lost. It returns on the next sync if Greenbone still reports it.`)) return;
+    void call(f.id, `/api/vapt/findings/${encodeURIComponent(f.id)}`, { method: "DELETE" }, () => `Deleted "${f.name}" on ${f.host}.`);
+  };
+
   const canEdit = data?.canEdit ?? roles.some((r) => ["SOC_Admin", "SOC_Analyst"].includes(r));
   const rows = useMemo(() => {
     // Every word must match somewhere (any order), so "apache 10.0.0.5" works.
@@ -100,6 +112,7 @@ export default function FindingsWorkspace({ user, roles }: { user: { name?: stri
         <span className="pv-logo"><LogoMark size={18} /></span>
         <Link href="/vapt" className="pv-chip">← VAPT workspace</Link>
         <Link href="/risk" className="pv-chip pv-chip-link">Risk &amp; validation →</Link>
+        <Link href="/cyberreasoner" className="pv-chip pv-chip-link">CyberReasoner →</Link>
         <span className="pv-chip">Findings &amp; remediation</span>
         <div className="pv-actions">
           {canEdit && <button className="pv-btn pv-btn-primary" onClick={() => void sync()} disabled={busy !== ""}>{busy === "sync" ? "Syncing…" : "Sync Greenbone findings"}</button>}
@@ -116,6 +129,16 @@ export default function FindingsWorkspace({ user, roles }: { user: { name?: stri
         <p className="vapt-warning">Scanner output is <b>evidence for analyst triage, not proof that an asset is compromised</b>. A retest launches a new authorized scan (same scope, audit and rate-limit rules as any scan); nothing is fixed or changed on the host. A finding can be closed only after a retest was requested, or by a SOC_Admin who writes a justification in the notes.</p>
         {error && <div className="pv-list pv-error" role="alert">{error}</div>}
         {notice && <div className="pv-list vapt-ok" role="status">{notice}</div>}
+
+        {data?.isAdmin && (
+          <div className="pv-list fd-data" aria-label="Data tools">
+            <small>Data tools (SOC_Admin)</small>
+            <div className="fd-actions">
+              {data.demoDataAvailable && <button className="pv-btn pv-btn-primary" disabled={busy !== "" || (data.findings.length > 0)} onClick={() => void seed()} title={data.findings.length > 0 ? "Delete the current data first" : "Load labelled sample findings"}>{busy === "seed" ? "Loading…" : "Load sample data"}</button>}
+              <button className="pv-btn fd-danger" disabled={busy !== "" || data.findings.length === 0} onClick={clearAll}>{busy === "clear" ? "Deleting…" : "Delete all findings data"}</button>
+            </div>
+          </div>
+        )}
 
         <div className="pv-invest-summary fd-tiles">
           <div><span>Findings</span><strong>{sum?.total ?? 0}</strong><em>imported from Greenbone</em></div>
@@ -138,7 +161,7 @@ export default function FindingsWorkspace({ user, roles }: { user: { name?: stri
         <div className="pv-list">
           <small>{rows.length} finding{rows.length === 1 ? "" : "s"}{rows.length !== (data?.findings.length ?? 0) ? ` (filtered from ${data?.findings.length})` : ""}</small>
           {loading && !data ? <p className="pv-empty">Loading…</p> : rows.length === 0 ? (
-            <p className="pv-empty">{(data?.findings.length ?? 0) === 0 ? "No findings yet. Complete an authorized scan in the VAPT workspace, wait for Greenbone to finish it, then use Sync Greenbone findings." : "No findings match these filters."}</p>
+            <p className="pv-empty">{(data?.findings.length ?? 0) === 0 ? "No findings yet. Complete an authorized scan in the VAPT workspace, wait for Greenbone to finish it, then use Sync Greenbone findings." + (data?.isAdmin && data?.demoDataAvailable ? " Or load sample data with the button above." : "") :"No findings match these filters."}</p>
           ) : rows.slice(0, shown).map((f) => {
             const d = drafts[f.id] ?? draftOf(f);
             const dirty = d.status !== f.remediationStatus || d.owner !== f.owner || d.notes !== f.remediationNotes;
@@ -163,6 +186,7 @@ export default function FindingsWorkspace({ user, roles }: { user: { name?: stri
                   <div className="fd-actions">
                     <button className="pv-btn pv-btn-primary" disabled={!canEdit || !dirty || busy !== ""} onClick={() => save(f)}>{busy === f.id ? "Saving…" : "Save"}</button>
                     <button className="pv-btn" disabled={!canEdit || busy !== ""} onClick={() => retest(f)} title={canEdit ? "Request a new authorized scan of this host" : "SOC_Analyst or SOC_Admin role required"}>Request retest</button>
+                    {data?.isAdmin && <button className="pv-btn fd-danger" disabled={busy !== ""} onClick={() => remove(f)} title="Delete this finding (SOC_Admin)">Delete</button>}
                     <button className="pv-btn" onClick={() => setOpen(expanded ? null : f.id)}>{expanded ? "Hide details" : "Details"}</button>
                   </div>
                 </div>

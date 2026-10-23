@@ -147,3 +147,23 @@ npm run build       # do not run while `npm run dev` is running: it corrupts the
 - **Realm import fix:** the original `primesoc-realm.json` defined a custom `clientScopes` block, which stopped Keycloak creating its built-in `profile`/`email` scopes and made every sign-in fail with `invalid_scope`. It was removed; Keycloak's built-in `roles` scope already emits `realm_access.roles`.
 - Converted to TypeScript, moved the protected page to `/dashboard`, made `/` the public landing page.
 - Day 2-4 packages were ported rather than dropped in, with hardening (exact-match correlation, strict CIDR rules, scope revocation, fail-closed expiry checks, audit of refused scans).
+
+## Day 7: CyberReasoner (defensive, local model)
+
+`/cyberreasoner` asks a **local** Ollama model to explain one imported finding and suggest remediation and safe checks, and drafts a fixed, policy-gated workflow proposal. It is advisory: it never scans, tests, exploits or changes anything, and takes only a finding id as input.
+
+```
+ollama pull qwen2.5:7b        # or: docker compose --profile ai up -d ollama
+# .env: OLLAMA_BASE_URL=http://127.0.0.1:11434   CYBERREASONER_MODEL=qwen2.5:7b
+```
+
+Finding details are sent only to a loopback model unless you set `OLLAMA_ALLOW_REMOTE=true`. See [docs/day7-checklist.md](docs/day7-checklist.md) for what is verified, what is not (no JEV connection), and the limits.
+
+## Day 8: Observability (OpenTelemetry, opt-in)
+
+```
+docker compose --profile observe up -d jaeger otel-collector prometheus
+# .env: OTEL_ENABLED=true   then restart `npm run dev`
+```
+
+Then open `/observe` (reachability of Collector, Jaeger and Prometheus), Jaeger at http://localhost:16686 (service `primesec-web`) and Prometheus at http://localhost:9090 (`primesec_integration_calls_total`). Telemetry is off unless `OTEL_ENABLED=true`, never leaves the machine unless `OTEL_ALLOW_REMOTE=true`, and carries no URLs, hosts, tokens, prompts or finding details. See [docs/day8-checklist.md](docs/day8-checklist.md).

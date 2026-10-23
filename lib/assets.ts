@@ -55,6 +55,10 @@ export async function readAssets(): Promise<Asset[]> {
   }
 }
 
+export async function clearAssets(): Promise<number> {
+  return withStore<number>(async (items) => ({ items: [], result: items.length }));
+}
+
 export async function assetMap(): Promise<Map<string, Asset>> {
   return new Map((await readAssets()).map((a) => [hostKey(a.host), a]));
 }

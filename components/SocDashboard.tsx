@@ -81,7 +81,7 @@ function IntelView({ data }: { data: DashboardData["intel"] }) {
 function VaptView({ items }: { items: DashboardData["vulns"]["items"] }) {
   return (
     <div className="pv-list">
-      <small>Priority queue · <Link href="/vapt" className="pv-link">Run authorized Greenbone scans in the VAPT workspace →</Link> · <Link href="/vapt/findings" className="pv-link">Findings &amp; remediation →</Link> · <Link href="/risk" className="pv-link">Risk &amp; validation →</Link></small>
+      <small>Priority queue · <Link href="/vapt" className="pv-link">Run authorized Greenbone scans in the VAPT workspace →</Link> · <Link href="/vapt/findings" className="pv-link">Findings &amp; remediation →</Link> · <Link href="/risk" className="pv-link">Risk &amp; validation →</Link> · <Link href="/cyberreasoner" className="pv-link">CyberReasoner →</Link> · <Link href="/observe" className="pv-link">Observe →</Link></small>
       {items.map((v) => (
         <div className="pv-row pv-vrow" key={v.host + v.title}>
           <span className={`pv-sev sev-${v.sev.toLowerCase()}`}>{v.sev}</span>
@@ -282,6 +282,9 @@ export default function SocDashboard({ data, user, roles, wazuhUrl, onSignOut }:
         <div className="pv-actions">
           <span className={`pv-live ${allLive && !data.demo ? "" : "pv-sample"}`}><i /> {badge}</span>
           <Link href="/vapt" className="pv-btn">VAPT ↗</Link>
+          <Link href="/risk" className="pv-btn pv-hide">Risk ↗</Link>
+          <Link href="/cyberreasoner" className="pv-btn pv-hide">CyberReasoner ↗</Link>
+          <Link href="/observe" className="pv-btn pv-hide">Observe ↗</Link>
           {wazuhUrl
             ? <a className="pv-btn" href={wazuhUrl} target="_blank" rel="noreferrer">Open Wazuh ↗</a>
             : <span className="pv-btn pv-btn-off" title="Set WAZUH_DASHBOARD_URL in .env">Wazuh not configured</span>}

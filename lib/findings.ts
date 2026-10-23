@@ -297,6 +297,20 @@ export async function markRetestRequested(id: string, taskId: string | null, act
   });
 }
 
+/** Removes one finding from the local store. Greenbone is untouched: a later sync re-imports it if it is still reported. */
+export async function deleteFinding(id: string): Promise<Finding> {
+  return withStore<Finding>(async (items) => {
+    const found = items.find((f) => f.id === id);
+    if (!found) throw new FindingError("Finding not found.", "NOT_FOUND");
+    return { items: items.filter((f) => f.id !== id), result: found };
+  });
+}
+
+/** Empties the local findings store; returns how many were removed. */
+export async function clearFindings(): Promise<number> {
+  return withStore<number>(async (items) => ({ items: [], result: items.length }));
+}
+
 export async function getFinding(id: string): Promise<Finding | null> {
   return (await readFindings()).find((f) => f.id === id) ?? null;
 }

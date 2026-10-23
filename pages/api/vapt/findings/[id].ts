@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getServerSession } from "next-auth/next";
 import { authOptions, originIsAllowed } from "../../../../lib/auth";
-import { FindingError, getFinding, updateFinding, type Patch } from "../../../../lib/findings";
+import { deleteFinding, FindingError, getFinding, updateFinding, type Patch } from "../../../../lib/findings";
 import { writeAuditEvent } from "../../../../lib/audit";
 import { logError } from "../../../../lib/log";
 
@@ -13,8 +13,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const session = await getServerSession(req, res, authOptions);
   if (!session) return res.status(401).json({ error: "Authentication required" });
   res.setHeader("Cache-Control", "private, no-store, max-age=0");
-  if (req.method !== "PATCH") return res.status(405).json({ error: "Method not allowed" });
+  if (req.method !== "PATCH" && req.method !== "DELETE") return res.status(405).json({ error: "Method not allowed" });
   const roles = session.user?.roles ?? [];
+  if (req.method === "DELETE") {
+    // Deleting a finding removes its remediation history, so it is SOC_Admin only.
+    if (!roles.includes("SOC_Admin")) return res.status(403).json({ error: "SOC_Admin role required to delete a finding." });
+    if (!originIsAllowed(req)) return res.status(403).json({ error: "Cross-origin request rejected." });
+    const delId = String(req.query.id ?? "");
+    if (!FINDING_ID.test(delId)) return res.status(400).json({ error: "A valid finding id is required." });
+    const delActor = { name: session.user?.name ?? null, email: session.user?.email ?? null, roles };
+    try {
+      const removed = await deleteFinding(delId);
+      let auditRecorded = true;
+      try {
+        await writeAuditEvent({ action: "vapt_finding_deleted", actor: delActor, finding: { id: removed.id, host: removed.host, port: removed.port, name: removed.name, cves: removed.cves } });
+      } catch (error) {
+        auditRecorded = false;
+        logError("finding delete: applied but the audit write failed", error);
+      }
+      return res.status(200).json({ deleted: removed.id, auditRecorded });
+    } catch (error) {
+      if (error instanceof FindingError) return res.status(STATUS_FOR[error.code]).json({ error: error.message });
+      logError("finding delete", error);
+      return res.status(500).json({ error: "The findings store is unavailable." });
+    }
+  }
   if (!roles.some((r) => ["SOC_Admin", "SOC_Analyst"].includes(r))) return res.status(403).json({ error: "SOC_Analyst or SOC_Admin role required." });
   if (!originIsAllowed(req)) return res.status(403).json({ error: "Cross-origin request rejected." });
 

@@ -3,6 +3,7 @@
  * variables and are never returned to the browser. Everything here is read-only.
  * Ported from the PrimeSOC Day 2 package, with types added.
  */
+import { instrumentedCall } from "./telemetry.ts";
 
 export type IntegrationStatus = {
   name: string;
@@ -69,14 +70,17 @@ function cleanBaseUrl(value: string | undefined): string {
   return String(value || "").trim().replace(/\/+$/, "");
 }
 
-async function fetchWithTimeout(url: string, options: RequestInit = {}): Promise<Response> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs());
-  try {
-    return await fetch(url, { ...options, signal: controller.signal, cache: "no-store" });
-  } finally {
-    clearTimeout(timer);
-  }
+async function fetchWithTimeout(integration: string, operation: string, url: string, options: RequestInit = {}): Promise<Response> {
+  // `integration` and `operation` are fixed names chosen at the call site (never the URL), so telemetry labels stay bounded.
+  return instrumentedCall(integration, operation, async () => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs());
+    try {
+      return await fetch(url, { ...options, signal: controller.signal, cache: "no-store" });
+    } finally {
+      clearTimeout(timer);
+    }
+  });
 }
 
 async function readJson(response: Response): Promise<any> {
@@ -116,7 +120,7 @@ async function getWazuhToken(): Promise<{ baseUrl: string; token: string }> {
   if (!baseUrl || !username || !password) {
     throw codedError("Wazuh API URL or credentials are not configured.", "NOT_CONFIGURED");
   }
-  const response = await fetchWithTimeout(`${baseUrl}/security/user/authenticate?raw=true`, {
+  const response = await fetchWithTimeout("wazuh", "authenticate", `${baseUrl}/security/user/authenticate?raw=true`, {
     method: "POST",
     headers: { Authorization: `Basic ${basic(username, password)}`, Accept: "application/json" }
   });
@@ -136,7 +140,7 @@ async function getWazuhToken(): Promise<{ baseUrl: string; token: string }> {
 }
 
 async function wazuhApiGet(baseUrl: string, token: string, path: string) {
-  const response = await fetchWithTimeout(`${baseUrl}${path}`, {
+  const response = await fetchWithTimeout("wazuh", "request", `${baseUrl}${path}`, {
     headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }
   });
   const body = await readJson(response);
@@ -174,7 +178,7 @@ async function indexerSearch(path: string, query: unknown): Promise<any> {
   const baseUrl = cleanBaseUrl(process.env.WAZUH_INDEXER_URL);
   const username = process.env.WAZUH_INDEXER_USERNAME as string;
   const password = process.env.WAZUH_INDEXER_PASSWORD as string;
-  const response = await fetchWithTimeout(`${baseUrl}/${encodeURIComponent(path).replace(/%2A/g, "*")}/_search`, {
+  const response = await fetchWithTimeout("wazuh_indexer", "search", `${baseUrl}/${encodeURIComponent(path).replace(/%2A/g, "*")}/_search`, {
     method: "POST",
     headers: { Authorization: `Basic ${basic(username, password)}`, "Content-Type": "application/json", Accept: "application/json" },
     body: JSON.stringify(query)
@@ -346,7 +350,7 @@ export async function getWazuhOverview(): Promise<WazuhOverview> {
 
 async function openCtiGraphql(token: string, query: string, variables?: Record<string, unknown>): Promise<any> {
   const baseUrl = cleanBaseUrl(process.env.OPENCTI_URL);
-  const response = await fetchWithTimeout(`${baseUrl}/graphql`, {
+  const response = await fetchWithTimeout("opencti", "graphql", `${baseUrl}/graphql`, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", Accept: "application/json" },
     body: JSON.stringify(variables ? { query, variables } : { query })

@@ -21,7 +21,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       scopesError = "The scope store could not be read. No scan can be authorized until it is fixed.";
       return [];
     }),
-    readAuditEvents(30, ["vapt_scope_approved", "vapt_scope_revoked", "vapt_assessment_requested", "vapt_assessment_started", "vapt_assessment_failed", "vapt_assessment_denied", "vapt_findings_synchronized", "vapt_finding_updated", "vapt_finding_retest_requested", "vapt_asset_updated", "vapt_report_comparison_viewed"]).catch((error) => {
+    readAuditEvents(30, ["vapt_scope_approved", "vapt_scope_revoked", "vapt_assessment_requested", "vapt_assessment_started", "vapt_assessment_failed", "vapt_assessment_denied", "vapt_findings_synchronized", "vapt_finding_updated", "vapt_finding_retest_requested", "vapt_asset_updated", "vapt_report_comparison_viewed", "vapt_finding_deleted", "vapt_demo_data_seeded", "vapt_data_cleared", "cyberreasoner_analysis", "cyberreasoner_plan_created"]).catch((error) => {
       logError("vapt overview: reading audit log", error);
       return [];
     })

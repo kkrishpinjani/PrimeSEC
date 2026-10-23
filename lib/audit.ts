@@ -42,6 +42,11 @@ export type VaptFindingEvent = Base & (
   | { action: "vapt_finding_updated"; finding: { id: string; host: string; port: string; name: string; cves: string[] }; changes: string[]; status: { from: string; to: string } }
   | { action: "vapt_finding_retest_requested"; finding: { id: string; host: string; port: string; name: string }; target: string; taskId: string | null }
   | { action: "vapt_asset_updated"; host: string; changes: { field: "criticality" | "exposure"; from: string; to: string }[] }
+  | { action: "cyberreasoner_analysis"; finding: { id: string; host: string; port: string; name: string }; model: string; removedItems: number }
+  | { action: "cyberreasoner_plan_created"; finding: { id: string; host: string; port: string; name: string }; planId: string; taskTypes: string[] }
+  | { action: "vapt_finding_deleted"; finding: { id: string; host: string; port: string; name: string; cves: string[] } }
+  | { action: "vapt_demo_data_seeded"; findings: number; reports: number; hosts: number }
+  | { action: "vapt_data_cleared"; findings: number; assets: number; reports: number }
   | { action: "vapt_report_comparison_viewed"; baselineReportId: string; retestReportId: string; summary: { fixed: number; stillPresent: number; inconclusive: number; new: number } }
 );
 

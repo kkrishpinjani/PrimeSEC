@@ -140,6 +140,10 @@ export async function captureSnapshots(raws: RawFinding[], meta: CaptureMeta = {
   });
 }
 
+export async function clearSnapshots(): Promise<number> {
+  return withStore<number>(async (items) => ({ items: [], result: items.length }));
+}
+
 /** Pure comparison (no storage), so every rule can be tested directly. */
 export function compareSnapshots(baseline: ReportSnapshot, retest: ReportSnapshot): Comparison {
   const retestById = new Map(retest.findings.map((f) => [f.id, f]));

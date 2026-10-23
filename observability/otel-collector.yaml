@@ -1,0 +1,55 @@
+# OpenTelemetry Collector for PrimeSEC (local development). Receives OTLP/HTTP from the app on :4318,
+# sends traces to Jaeger and exposes metrics for Prometheus. No ports other than 4318 and 13133 are published.
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  memory_limiter:
+    check_interval: 2s
+    limit_mib: 256
+    spike_limit_mib: 64
+  # Defence in depth: query strings can carry identifiers or tokens, so they never leave the collector.
+  transform/redact:
+    error_mode: ignore
+    trace_statements:
+      - context: span
+        statements:
+          - 'replace_pattern(attributes["http.url"], "[?].*", "?REDACTED")'
+          - 'replace_pattern(attributes["url.full"], "[?].*", "?REDACTED")'
+          - 'replace_pattern(attributes["http.target"], "[?].*", "?REDACTED")'
+          - 'delete_key(attributes, "url.query")'
+          - 'delete_key(attributes, "http.request.header.authorization")'
+          - 'delete_key(attributes, "http.request.header.cookie")'
+  batch:
+    timeout: 5s
+    send_batch_size: 512
+
+exporters:
+  otlp/jaeger:
+    endpoint: jaeger:4317
+    tls:
+      insecure: true
+  prometheus:
+    endpoint: 0.0.0.0:8889
+    metric_expiration: 180m
+    resource_to_telemetry_conversion:
+      enabled: true
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+service:
+  extensions: [health_check]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, transform/redact, batch]
+      exporters: [otlp/jaeger]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [prometheus]

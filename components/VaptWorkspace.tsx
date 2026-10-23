@@ -38,6 +38,11 @@ function describe(e: AuditEvent): { label: string; detail: string; tone: "ok" | 
     case "vapt_finding_retest_requested": return { label: "Retest requested", detail: `${e.finding.name} on ${e.target}`, tone: "ok" };
     case "vapt_asset_updated": return { label: "Asset context changed", detail: `${e.host}: ${e.changes.map((c) => `${c.field} ${c.from} → ${c.to}`).join(", ") || "no change"}`, tone: "warn" };
     case "vapt_report_comparison_viewed": return { label: "Reports compared", detail: `${e.summary.fixed} fixed, ${e.summary.stillPresent} still present, ${e.summary.inconclusive} inconclusive`, tone: "ok" };
+    case "vapt_finding_deleted": return { label: "Finding deleted", detail: `${e.finding.name} on ${e.finding.host}`, tone: "warn" };
+    case "vapt_demo_data_seeded": return { label: "Sample data loaded", detail: `${e.findings} findings, ${e.reports} reports`, tone: "ok" };
+    case "vapt_data_cleared": return { label: "Findings data deleted", detail: `${e.findings} findings, ${e.assets} host contexts, ${e.reports} reports`, tone: "warn" };
+    case "cyberreasoner_analysis": return { label: "AI analysis", detail: `${e.finding.name} on ${e.finding.host} (${e.model})`, tone: "ok" };
+    case "cyberreasoner_plan_created": return { label: "Workflow plan drafted", detail: `${e.finding.name} on ${e.finding.host}`, tone: "ok" };
     default: return { label: "Event", detail: "", tone: "ok" };
   }
 }
@@ -113,6 +118,7 @@ export default function VaptWorkspace({ user, roles }: { user: { name?: string |
         <span className="pv-chip">Vulnerability assessment (VAPT)</span>
         <Link href="/vapt/findings" className="pv-chip pv-chip-link">Findings &amp; remediation →</Link>
         <Link href="/risk" className="pv-chip pv-chip-link">Risk &amp; validation →</Link>
+        <Link href="/cyberreasoner" className="pv-chip pv-chip-link">CyberReasoner →</Link>
         <div className="pv-actions">
           <button className="pv-btn" onClick={() => void load()} disabled={loading}>{loading ? "Checking…" : "↻ Refresh"}</button>
           <button className="pv-btn" onClick={() => void fullSignOut()}>Sign out</button>

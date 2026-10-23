@@ -9,6 +9,7 @@
 import { promises as fs } from "fs";
 import path from "path";
 import type { RawFinding } from "./findings";
+import { instrumentedCall } from "./telemetry.ts";
 
 export type VaptScope = {
   id: string;
@@ -199,7 +200,14 @@ const launchTimeout = () => Number(process.env.GREENBONE_LAUNCH_TIMEOUT_MS || 12
 type CodedError = Error & { code?: string };
 const coded = (message: string, code: string): CodedError => Object.assign(new Error(message), { code });
 
-async function bridgeFetch(pathname: string, options: RequestInit = {}, timeoutMs = bridgeTimeout()): Promise<any> {
+/** Maps a bridge path to a fixed operation name for telemetry (never the raw path). */
+const bridgeOperation = (pathname: string) => (pathname.includes("overview") ? "overview" : pathname.includes("findings") ? "findings" : pathname.includes("assessments") ? "assessments" : "request");
+
+function bridgeFetch(pathname: string, options: RequestInit = {}, timeoutMs = bridgeTimeout()): Promise<any> {
+  return instrumentedCall("greenbone", bridgeOperation(pathname), () => bridgeFetchInner(pathname, options, timeoutMs));
+}
+
+async function bridgeFetchInner(pathname: string, options: RequestInit = {}, timeoutMs: number): Promise<any> {
   const base = String(process.env.GREENBONE_BRIDGE_URL || "").trim().replace(/\/+$/, "");
   const token = String(process.env.GREENBONE_BRIDGE_TOKEN || "");
   if (!base || !token) throw coded("Configure GREENBONE_BRIDGE_URL and GREENBONE_BRIDGE_TOKEN in .env.", "NOT_CONFIGURED");

@@ -474,3 +474,8 @@ footer { margin-top: 36px; font-size: 0.74rem; color: rgba(255,255,255,0.3); dis
 .rk-row { display: grid; grid-template-columns: 100px 1.2fr 170px 2fr; gap: 10px; align-items: center; padding: 8px 10px; border-radius: 9px; background: rgba(0,0,0,0.26); font-size: 0.72rem; }
 .rk-row code { background: none; padding: 0; color: #cdeee9; font-size: 0.68rem; }
 @media (max-width: 900px) { .rk-row { grid-template-columns: 1fr; } }
+
+/* Data tools (sample data, delete) */
+.fd-data { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.pv-btn.fd-danger { color: #fca5a5; border-color: rgba(248,113,113,0.4); }
+.pv-btn.fd-danger:hover:not(:disabled) { background: rgba(248,113,113,0.12); }
