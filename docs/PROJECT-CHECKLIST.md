@@ -206,6 +206,11 @@ Full detail: [day6-checklist.md](day6-checklist.md). Analysis only: it never sca
 - [x] Fixes over the supplied package: permits were not bound to the action they were issued for; two simultaneous requests could both spend one permit; an approved action could never proceed; a requester could approve their own request; approval requests could be flooded; the evaluation wrote ten events and findings per run.
 - [ ] Not wired into any real agent runtime (no adapter yet); local JSON state is single-process.
 
+## SAP configuration risk
+- [x] `/sap`: offline assessment of pasted SAProuter and Gateway configuration (seven rules), history, knowledge search, optional local-model explanation, JSON export. 70 unit tests and 41 end-to-end checks.
+- [x] Fixes over the supplied rules: deny lines were flagged as risks, quoted SNC names with spaces were mis-parsed, the ordering check ignored overlap, only the first matching line was reported. Ported into PrimeSEC instead of running the package's separate Python service, database and auth.
+- [ ] Not tested against real SAP files; only seven patterns; not linked to the Findings or Risk screens.
+
 ### Decisions and housekeeping that need you
 - [~] **Port 8010 identified:** it is your **AgenticOS** FastAPI backend (`new project langdiify/backend` on your Desktop; routers for auth, agents, workflows, approvals, knowledge, memory, audit, billing, graph and evaluation; `/docs`, `/api/system/health`). It was not running when checked. **PrimeSEC does not call it**: all Wazuh/OpenCTI/Greenbone access goes straight from Next.js server-side.
 - [ ] Decide what PrimeSEC should use the 8010 backend for (for example agent-assisted alert triage, a shared sign-in, or shared audit) before any integration is built.

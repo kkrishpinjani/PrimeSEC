@@ -180,3 +180,7 @@ A manual registry of AI agents, restrictive-only policies and a deterministic ev
 
 On the `/agents` page: the **Gateway** gives an agent adapter a one-time, 60-second permit for one exact action (or an approval request when a person must decide), **Approvals** lets someone other than the requester approve or reject, and **Evaluation** runs ten fixed policy checks and exports a JSON report. PrimeSEC never runs the action: the adapter must spend the permit first. See [docs/day13-14-checklist.md](docs/day13-14-checklist.md).
 
+## SAP configuration risk (`/sap`)
+
+Paste SAP router and gateway configuration text (saprouttab, gateway profile, reginfo, secinfo) and PrimeSEC lists configuration risks with evidence, remediation and SAP Help references, plus an optional advisory explanation from the local model. It is offline: nothing is contacted or scanned, and the pasted configuration is not stored. See [docs/sap-checklist.md](docs/sap-checklist.md).
+

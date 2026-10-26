@@ -53,6 +53,7 @@ export type VaptFindingEvent = Base & (
   | { action: "agent_permit_consumed"; grantId: string; agentId: string; tool: string; via: string }
   | { action: "agent_permit_rejected"; reason: string; agentId: string; tool: string }
   | { action: "agent_approval_decided"; approvalId: string; agentId: string; tool: string; decision: string; requestedBy: string | null }
+  | { action: "sap_assessment_created"; assessmentId: string; assetId: string; findingCount: number; findingIds: string[]; explained: boolean }
   | { action: "vapt_finding_deleted"; finding: { id: string; host: string; port: string; name: string; cves: string[] } }
   | { action: "vapt_demo_data_seeded"; findings: number; reports: number; hosts: number }
   | { action: "vapt_data_cleared"; findings: number; assets: number; reports: number }
