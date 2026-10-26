@@ -40,7 +40,21 @@ export type AgentFinding = {
   id: string; agentId: string; agentName: string; tool: string; decision: Decision; severity: string;
   status: "open" | "pending_approval"; title: string; summary: string; count: number; firstSeenAt: string; lastSeenAt: string; eventId: string | null;
 };
-export type AgentState = { version: 2; policyRevision: number; agents: Agent[]; policies: Policy[]; findings: AgentFinding[] };
+/** A human decision on a REQUIRE_APPROVAL action. It never executes anything; it only lets the SAME action be re-submitted once. */
+export type Approval = {
+  id: string; requestId: string; fingerprint: string; agentId: string; agentName: string; tool: string; target: string; dataClass: string;
+  status: "pending" | "approved" | "rejected" | "expired" | "used";
+  requestedBy: { email: string | null; name: string | null }; createdAt: string; expiresAt: string;
+  decidedBy: { email: string | null; name: string | null } | null; decidedAt: string | null; decisionNote: string;
+  /** After approval, the requester has until this time to re-submit the action. */
+  approvedUntil: string | null; usedAt: string | null; reasons: string[];
+};
+/** A one-time permit. Only a hash of the secret is stored; the fingerprint binds it to one exact action. */
+export type Grant = {
+  id: string; grantHash: string; fingerprint: string; agentId: string; tool: string; via: "policy" | "approval"; approvalId: string | null;
+  requestedBy: string | null; issuedAt: string; expiresAt: string; consumedAt: string | null;
+};
+export type AgentState = { version: 3; policyRevision: number; agents: Agent[]; policies: Policy[]; findings: AgentFinding[]; approvals: Approval[]; grants: Grant[] };
 
 export class AgentSecError extends Error {
   code: "INVALID" | "NOT_FOUND" | "CONFLICT" | "LOCKED";
@@ -60,7 +74,7 @@ const seedPolicy = (p: Pick<Policy, "id" | "name" | "description" | "action" | "
 
 export function defaultState(): AgentState {
   return {
-    version: 2, policyRevision: 1, findings: [],
+    version: 3, policyRevision: 1, findings: [], approvals: [], grants: [],
     agents: [
       seedAgent({ id: "agent-procurement-01", name: "Procurement Copilot (example)", framework: "LangChain", model: "qwen2.5:7b", environment: "development", owner: "Procurement Engineering", tools: ["purchase_order.read", "supplier_email.draft"], dataClasses: ["internal"], privileges: "moderate", criticality: "medium", notes: "Seeded example. Not discovered from a live platform." }),
       seedAgent({ id: "agent-support-01", name: "Support Triage Agent (example)", framework: "n8n", model: "not reported", environment: "development", owner: "Customer Operations", tools: ["ticket.read", "ticket.comment"], dataClasses: ["customer-data"], privileges: "moderate", criticality: "high", notes: "Seeded example. Not discovered from a live platform." }),
@@ -83,8 +97,12 @@ let chain: Promise<unknown> = Promise.resolve();
 export async function readState(): Promise<AgentState> {
   try {
     const value = JSON.parse(await fs.readFile(storePath(), "utf8")) as AgentState;
-    if (!value || value.version !== 2 || !Array.isArray(value.agents) || !Array.isArray(value.policies)) throw new Error("unexpected state shape");
+    if (!value || ((value.version as number) !== 2 && (value.version as number) !== 3) || !Array.isArray(value.agents) || !Array.isArray(value.policies)) throw new Error("unexpected state shape");
+    // A version 2 file (Days 10-12) gains the gateway collections; nothing else changes.
+    value.version = 3;
     value.findings = Array.isArray(value.findings) ? value.findings : [];
+    value.approvals = Array.isArray(value.approvals) ? value.approvals : [];
+    value.grants = Array.isArray(value.grants) ? value.grants : [];
     return value;
   } catch (error) {
     if ((error as NodeJS.ErrnoException)?.code === "ENOENT") return defaultState();
@@ -208,25 +226,37 @@ export function recordFinding(state: AgentState, e: Evaluation, eventId: string 
   return finding;
 }
 
-/* ---------------------------------- scenarios ---------------------------------- */
+/* ---------------------------------- evaluation ---------------------------------- */
 
-export type Scenario = { id: string; name: string; description: string; input: ActionInput; expected: Decision };
+export type Scenario = { id: string; name: string; description: string; category: string; input: ActionInput; expected: Decision; prepare?: (state: AgentState) => void };
 export const SCENARIOS: Scenario[] = [
-  { id: "scenario-01", name: "Registered read tool", description: "A registered, low-risk read tool should be allowed.", input: { agentId: "agent-procurement-01", tool: "purchase_order.read", dataClass: "internal" }, expected: "ALLOW" },
-  { id: "scenario-02", name: "Unregistered shell tool", description: "A tool the agent was never registered for must be denied.", input: { agentId: "agent-procurement-01", tool: "shell.execute", dataClass: "internal" }, expected: "DENY" },
-  { id: "scenario-03", name: "Payment approval", description: "A registered but high-impact action needs a human.", input: { agentId: "agent-finance-01", tool: "payment.approve", dataClass: "financial" }, expected: "REQUIRE_APPROVAL" },
-  { id: "scenario-04", name: "Sensitive external transfer", description: "Customer data sent to an external destination is denied.", input: { agentId: "agent-support-01", tool: "ticket.comment", dataClass: "customer-data", target: "external vendor endpoint", external: true }, expected: "DENY" },
-  { id: "scenario-05", name: "Unknown agent", description: "An unregistered agent id is held for review, never trusted.", input: { agentId: "agent-unregistered-simulation", tool: "ticket.read", dataClass: "unknown" }, expected: "REVIEW" },
-  { id: "scenario-06", name: "Caller cannot downgrade sensitivity", description: "Saying sensitive:false does not hide a payment tool.", input: { agentId: "agent-finance-01", tool: "payment.approve", dataClass: "internal", sensitive: false }, expected: "REQUIRE_APPROVAL" }
+  { id: "eval-01", name: "Registered read tool", description: "A registered, low-risk read tool should be allowed.", category: "least-privilege", input: { agentId: "agent-procurement-01", tool: "purchase_order.read", dataClass: "internal" }, expected: "ALLOW" },
+  { id: "eval-02", name: "Unregistered shell tool", description: "A tool the agent was never registered for must be denied.", category: "tool-control", input: { agentId: "agent-procurement-01", tool: "shell.execute", dataClass: "internal" }, expected: "DENY" },
+  { id: "eval-03", name: "Payment approval", description: "A registered but high-impact action needs a human.", category: "human-oversight", input: { agentId: "agent-finance-01", tool: "payment.approve", dataClass: "financial" }, expected: "REQUIRE_APPROVAL" },
+  { id: "eval-04", name: "Sensitive external transfer", description: "Customer data sent to an external destination is denied.", category: "data-exfiltration", input: { agentId: "agent-support-01", tool: "ticket.comment", dataClass: "customer-data", target: "external vendor endpoint", external: true }, expected: "DENY" },
+  { id: "eval-05", name: "Unknown agent", description: "An unregistered agent id is held for review, never trusted.", category: "identity", input: { agentId: "agent-unregistered-simulation", tool: "ticket.read", dataClass: "unknown" }, expected: "REVIEW" },
+  { id: "eval-06", name: "Caller cannot downgrade sensitivity", description: "Saying sensitive:false does not hide a payment tool.", category: "policy-integrity", input: { agentId: "agent-finance-01", tool: "payment.approve", dataClass: "internal", sensitive: false }, expected: "REQUIRE_APPROVAL" },
+  { id: "eval-07", name: "Unregistered MCP tool", description: "A tool exposed by an MCP server nobody registered is denied.", category: "mcp-governance", input: { agentId: "agent-support-01", tool: "mcp.unapproved.invoke", dataClass: "internal" }, expected: "DENY" },
+  { id: "eval-08", name: "Destructive action", description: "A delete the agent was not registered for is denied.", category: "destructive-action", input: { agentId: "agent-procurement-01", tool: "purchase_order.delete", dataClass: "internal" }, expected: "DENY" },
+  { id: "eval-09", name: "Financial data to a third party", description: "Even a registered read is denied when the data is financial and the destination is external.", category: "data-boundary", input: { agentId: "agent-finance-01", tool: "invoice.read", dataClass: "financial", external: true, target: "third-party" }, expected: "DENY" },
+  { id: "eval-10", name: "Suspended agent", description: "A suspended agent is denied even for a tool it is registered for.", category: "lifecycle", input: { agentId: "agent-procurement-01", tool: "purchase_order.read", dataClass: "internal" }, expected: "DENY", prepare: (st) => { st.agents.find((a) => a.id === "agent-procurement-01")!.status = "suspended"; } }
+];
+export const EVALUATION_LIMITATIONS = [
+  "These are deterministic checks of the policy rules against synthetic action metadata and the current configuration.",
+  "No prompts are sent to any model or agent platform, and no agent runtime is contacted.",
+  "A pass shows this rule set behaves as listed. It is not a measure of model alignment, prompt-injection resistance, or proof that any runtime enforces the decisions."
 ];
 
-/** Runs the scenarios against the CURRENT state without recording anything. A failure means the live policy set no longer behaves as expected. */
+/** Runs the suite against the CURRENT state without recording anything. A failure means the live policy set no longer behaves as expected. */
 export function runScenarios(state: AgentState) {
   const results = SCENARIOS.map((s) => {
-    const e = evaluateAction(state, s.input);
-    return { id: s.id, name: s.name, description: s.description, expected: s.expected, actual: e.decision, passed: e.decision === s.expected, reasons: e.reasons.map((r) => r.reason) };
+    let st = state;
+    if (s.prepare) { st = JSON.parse(JSON.stringify(state)) as AgentState; s.prepare(st); }
+    const e = evaluateAction(st, s.input);
+    return { id: s.id, name: s.name, description: s.description, category: s.category, expected: s.expected, actual: e.decision, passed: e.decision === s.expected, reasons: e.reasons.map((r) => r.reason) };
   });
-  return { results, passed: results.filter((r) => r.passed).length, total: results.length };
+  const passed = results.filter((r) => r.passed).length;
+  return { results, passed, total: results.length, passRate: Math.round((100 * passed) / results.length) };
 }
 
 /* --------------------------------- mutations --------------------------------- */

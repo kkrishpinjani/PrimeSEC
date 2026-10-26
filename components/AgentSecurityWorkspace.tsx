@@ -2,17 +2,19 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { LogoMark } from "./Logo";
 import { fullSignOut } from "../lib/signOutClient";
-import type { Agent, AgentFinding, Evaluation, Policy } from "../lib/agentsec";
+import type { Agent, AgentFinding, Approval, Evaluation, Policy } from "../lib/agentsec";
+import type { GatewayResult } from "../lib/agentgate";
 import type { AuditEvent } from "../lib/audit";
 
 type Overview = {
   metrics: Record<string, number>; policyRevision: number; findings: AgentFinding[]; events: AuditEvent[];
   canEdit: boolean; canEvaluate: boolean;
 };
-type ScenarioRun = { ranAt: string; policyRevision: number; passed: number; total: number; note: string; results: { id: string; name: string; description: string; expected: string; actual: string; passed: boolean; reasons: string[] }[] };
-type Tab = "overview" | "inventory" | "policies" | "lab";
+type ScenarioRun = { reportId: string; ranAt: string; ranBy: string | null; policyRevision: number; passed: number; total: number; passRate: number; note: string; limitations: string[]; results: { id: string; name: string; description: string; category: string; expected: string; actual: string; passed: boolean; reasons: string[] }[] };
+type ApprovalRow = Approval & { mine: boolean };
+type Tab = "overview" | "inventory" | "policies" | "gateway" | "approvals" | "lab";
 
-const TABS: { id: Tab; label: string }[] = [{ id: "overview", label: "Overview" }, { id: "inventory", label: "Agent inventory" }, { id: "policies", label: "Policies" }, { id: "lab", label: "Test lab" }];
+const TABS: { id: Tab; label: string }[] = [{ id: "overview", label: "Overview" }, { id: "inventory", label: "Agent inventory" }, { id: "policies", label: "Policies" }, { id: "gateway", label: "Gateway" }, { id: "approvals", label: "Approvals" }, { id: "lab", label: "Evaluation" }];
 const DECISION_CLASS: Record<string, string> = { ALLOW: "sev-low", REVIEW: "sev-medium", REQUIRE_APPROVAL: "sev-medium", DENY: "sev-high" };
 const when = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleString() : "—");
 
@@ -22,7 +24,11 @@ function describe(e: AuditEvent): string {
     case "agent_status_changed": return `${e.agent.name}: ${e.from} → ${e.to}`;
     case "agent_policy_changed": return `Policy ${e.policy.id} ${e.change} (revision ${e.policyRevision})`;
     case "agent_policy_evaluated": return `${e.agentId} → ${e.tool}: ${e.decision}`;
-    case "agent_scenarios_run": return `Scenario suite: ${e.passed}/${e.total} passed`;
+    case "agent_scenarios_run": return `Evaluation: ${e.passed}/${e.total} passed${e.reportId ? ` (${e.reportId})` : ""}`;
+    case "agent_gateway_decision": return `Gateway: ${e.agentId} → ${e.tool}: ${e.decision}, ${e.status.replace(/_/g, " ")}`;
+    case "agent_permit_consumed": return `Permit used: ${e.agentId} → ${e.tool}`;
+    case "agent_permit_rejected": return `Permit refused (${e.reason}): ${e.agentId} → ${e.tool}`;
+    case "agent_approval_decided": return `Approval ${e.approvalId} ${e.decision}: ${e.agentId} → ${e.tool}`;
     default: return e.action;
   }
 }
@@ -39,6 +45,11 @@ export default function AgentSecurityWorkspace({ user, roles }: { user: { name?:
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState("");
   const [run, setRun] = useState<ScenarioRun | null>(null);
+  const [approvals, setApprovals] = useState<ApprovalRow[]>([]);
+  const [note, setNote] = useState<Record<string, string>>({});
+  const [gate, setGate] = useState<GatewayResult | null>(null);
+  const [gateForm, setGateForm] = useState({ agentId: "agent-finance-01", tool: "payment.approve", dataClass: "financial", target: "", external: false });
+  const [permitCheck, setPermitCheck] = useState({ permit: "", agentId: "", tool: "", dataClass: "", target: "" });
   const [tried, setTried] = useState<Evaluation | null>(null);
   const [form, setForm] = useState({ name: "", framework: "Custom", owner: "", environment: "development", model: "", tools: "", privileges: "moderate", criticality: "medium" });
   const [policyForm, setPolicyForm] = useState({ name: "", description: "", condition: "sensitive_action", action: "require_approval", severity: "high" });
@@ -49,8 +60,9 @@ export default function AgentSecurityWorkspace({ user, roles }: { user: { name?:
 
   const load = useCallback(async () => {
     try {
-      const [o, a, p] = await Promise.all([fetch("/api/agents/overview", { cache: "no-store" }), fetch("/api/agents", { cache: "no-store" }), fetch("/api/agents/policies", { cache: "no-store" })]);
-      const [ob, ab, pb] = await Promise.all([o.json(), a.json(), p.json()]);
+      const [o, a, p, ap] = await Promise.all([fetch("/api/agents/overview", { cache: "no-store" }), fetch("/api/agents", { cache: "no-store" }), fetch("/api/agents/policies", { cache: "no-store" }), fetch("/api/agents/approvals", { cache: "no-store" })]);
+      const [ob, ab, pb, apb] = await Promise.all([o.json(), a.json(), p.json(), ap.json()]);
+      if (ap.ok) setApprovals(apb.approvals);
       if (!o.ok) throw new Error(ob.error || "Could not load the overview.");
       if (!a.ok) throw new Error(ab.error || "Could not load the agent inventory.");
       if (!p.ok) throw new Error(pb.error || "Could not load the policies.");
@@ -82,7 +94,17 @@ export default function AgentSecurityWorkspace({ user, roles }: { user: { name?:
   const setStatus = (a: Agent) => send(a.id, "/api/agents", { method: "PATCH", body: JSON.stringify({ id: a.id, status: a.status === "suspended" ? "registered" : "suspended" }) }, (b) => `${b.agent.name} is now ${b.agent.status}.`);
   const toggle = (p: Policy) => send(p.id, "/api/agents/policies", { method: "PATCH", body: JSON.stringify({ id: p.id, enabled: !p.enabled }) }, (b) => `${b.policy.name} ${b.policy.enabled ? "enabled" : "disabled"}.`);
   const addPolicy = () => send("policy", "/api/agents/policies", { method: "POST", body: JSON.stringify(policyForm) }, (b) => { setPolicyForm({ ...policyForm, name: "", description: "" }); return `Added ${b.policy.id}.`; });
-  const runScenarios = () => send("scenarios", "/api/agents/scenarios", { method: "POST" }, (b) => { setRun(b); return `Scenario suite: ${b.passed} of ${b.total} passed.`; });
+  const runScenarios = () => send("scenarios", "/api/agents/scenarios", { method: "POST" }, (b) => { setRun(b); return `Evaluation ${b.reportId}: ${b.passed} of ${b.total} passed.`; });
+  const askGateway = () => send("gateway", "/api/agents/gateway/action", { method: "POST", body: JSON.stringify(gateForm) }, (b) => { setGate(b); return `Gateway: ${b.decision} (${b.status.replace(/_/g, " ")}).`; });
+  const decide = (a: Approval, decision: "approve" | "reject") => send(a.id, "/api/agents/approvals", { method: "POST", body: JSON.stringify({ id: a.id, decision, note: note[a.id] ?? "" }) }, (b) => b.message);
+  const checkPermit = () => send("consume", "/api/agents/gateway/consume", { method: "POST", body: JSON.stringify(permitCheck) }, (b) => b.message);
+  const download = () => {
+    if (!run) return;
+    const url = URL.createObjectURL(new Blob([JSON.stringify(run, null, 2)], { type: "application/json" }));
+    const a = document.createElement("a");
+    a.href = url; a.download = `${run.reportId}.json`; a.click();
+    URL.revokeObjectURL(url);
+  };
   const tryAction = () => send("evaluate", "/api/agents/evaluate", { method: "POST", body: JSON.stringify(action) }, (b) => { setTried(b); return `Decision: ${b.decision}.`; });
 
   const m = overview?.metrics;
@@ -200,22 +222,87 @@ export default function AgentSecurityWorkspace({ user, roles }: { user: { name?:
           </>
         )}
 
+
+        {tab === "gateway" && (
+          <>
+            <div className="pv-list">
+              <small>Ask the gateway before an agent acts</small>
+              <p className="fd-meta">Allowed actions get a <b>one-time permit</b> that lasts 60 seconds and works only for this exact agent, tool, destination and data class. Actions that need a person create an approval request. Denied or held actions get nothing. PrimeSEC never runs the action; the adapter must consume the permit first.</p>
+              <div className="fd-edit">
+                <label>Agent<select className="fd-input" value={gateForm.agentId} disabled={!canEvaluate} onChange={(e) => setGateForm({ ...gateForm, agentId: e.target.value })}>
+                  {agents.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}<option value="agent-not-in-registry">(an unregistered agent id)</option>
+                </select></label>
+                <label>Tool<input className="fd-input" value={gateForm.tool} maxLength={120} disabled={!canEvaluate} onChange={(e) => setGateForm({ ...gateForm, tool: e.target.value })} /></label>
+                <label>Data class<input className="fd-input" value={gateForm.dataClass} maxLength={80} disabled={!canEvaluate} onChange={(e) => setGateForm({ ...gateForm, dataClass: e.target.value })} /></label>
+                <label>Destination (optional)<input className="fd-input" value={gateForm.target} maxLength={160} disabled={!canEvaluate} onChange={(e) => setGateForm({ ...gateForm, target: e.target.value })} /></label>
+                <label className="fd-check"><input type="checkbox" checked={gateForm.external} disabled={!canEvaluate} onChange={(e) => setGateForm({ ...gateForm, external: e.target.checked })} /> Goes to an external destination</label>
+                <div className="fd-actions"><button className="pv-btn pv-btn-primary" disabled={!canEvaluate || busy !== "" || !gateForm.tool} onClick={() => void askGateway()}>{busy === "gateway" ? "Asking…" : "Ask the gateway"}</button></div>
+              </div>
+              {gate && (
+                <div className="fd-card">
+                  <div className="fd-head"><span className={`pv-sev ${DECISION_CLASS[gate.decision]}`}>{gate.decision.replace("_", " ")}</span><strong className="fd-name">{gate.status.replace(/_/g, " ")}</strong>{gate.authorizedByApproval && <span className="fd-flag">Approved by a person</span>}</div>
+                  <p className="fd-meta">{gate.message}</p>
+                  {gate.permit && <p className="fd-meta">Permit (shown once, keep it secret): <code>{gate.permit}</code> · valid {gate.permitExpiresInSeconds} s</p>}
+                  {gate.approvalId && <p className="fd-meta">Approval request <code>{gate.approvalId}</code>{gate.approvalExpiresAt ? ` · expires ${when(gate.approvalExpiresAt)}` : ""}. Someone other than you must decide it on the Approvals tab.</p>}
+                  <ul>{gate.reasons.map((r, i) => <li key={i}><b>{r.policy}</b>: {r.reason}</li>)}</ul>
+                </div>
+              )}
+            </div>
+            <div className="pv-list">
+              <small>Check a permit (what an adapter does just before acting)</small>
+              <div className="fd-edit">
+                <label>Permit<input className="fd-input" value={permitCheck.permit} maxLength={200} disabled={!canEvaluate} onChange={(e) => setPermitCheck({ ...permitCheck, permit: e.target.value.trim() })} /></label>
+                <label>Agent id<input className="fd-input" value={permitCheck.agentId} maxLength={120} disabled={!canEvaluate} onChange={(e) => setPermitCheck({ ...permitCheck, agentId: e.target.value })} /></label>
+                <label>Tool<input className="fd-input" value={permitCheck.tool} maxLength={120} disabled={!canEvaluate} onChange={(e) => setPermitCheck({ ...permitCheck, tool: e.target.value })} /></label>
+                <label>Data class<input className="fd-input" value={permitCheck.dataClass} maxLength={80} disabled={!canEvaluate} onChange={(e) => setPermitCheck({ ...permitCheck, dataClass: e.target.value })} /></label>
+                <label>Destination<input className="fd-input" value={permitCheck.target} maxLength={160} disabled={!canEvaluate} onChange={(e) => setPermitCheck({ ...permitCheck, target: e.target.value })} /></label>
+                <div className="fd-actions"><button className="pv-btn" disabled={!canEvaluate || busy !== "" || !permitCheck.permit} onClick={() => void checkPermit()}>{busy === "consume" ? "Checking…" : "Use permit once"}</button></div>
+              </div>
+              <p className="fd-meta">The permit is spent only if these details match what it was issued for. A second attempt, an expired permit or a different action is refused.</p>
+            </div>
+          </>
+        )}
+
+        {tab === "approvals" && (
+          <div className="pv-list">
+            <small>Approval requests · decided by someone other than the requester, within 30 minutes</small>
+            {approvals.length === 0 ? <p className="pv-empty">No approval requests. Ask the gateway for an action that needs approval, such as <code>payment.approve</code> on the finance agent.</p> : approvals.map((a) => (
+              <div className="fd-card" key={a.id}>
+                <div className="fd-head">
+                  <span className={`pv-sev ${a.status === "approved" ? "sev-low" : a.status === "pending" ? "sev-medium" : "sev-high"}`}>{a.status}</span>
+                  <strong className="fd-name">{a.agentName} → {a.tool}</strong><code>{a.id}</code>{a.mine && <span className="fd-flag">Your request</span>}
+                </div>
+                <p className="fd-meta">asked by {a.requestedBy.email || a.requestedBy.name} · {when(a.createdAt)} · data class {a.dataClass}{a.target ? ` · to ${a.target}` : ""}{a.decidedBy ? ` · decided by ${a.decidedBy.email || a.decidedBy.name} ${when(a.decidedAt)}` : ` · expires ${when(a.expiresAt)}`}{a.decisionNote ? ` · note: ${a.decisionNote}` : ""}</p>
+                <ul>{a.reasons.map((r, i) => <li key={i}>{r}</li>)}</ul>
+                {a.status === "pending" && canEvaluate && (a.mine
+                  ? <p className="fd-meta">You made this request, so another person has to decide it.</p>
+                  : <div className="fd-actions">
+                      <input className="fd-input" placeholder="Note (optional)" maxLength={500} value={note[a.id] ?? ""} onChange={(e) => setNote({ ...note, [a.id]: e.target.value })} />
+                      <button className="pv-btn pv-btn-primary" disabled={busy !== ""} onClick={() => void decide(a, "approve")}>Approve</button>
+                      <button className="pv-btn fd-danger" disabled={busy !== ""} onClick={() => void decide(a, "reject")}>Reject</button>
+                    </div>)}
+                {a.status === "approved" && <p className="fd-meta">Approved. Nothing has run. The requester can submit the same action to the gateway once more, until {when(a.approvedUntil)}, to receive a permit.</p>}
+              </div>
+            ))}
+          </div>
+        )}
+
         {tab === "lab" && (
           <>
             <div className="pv-list">
-              <small>Scenario suite (does not record findings)</small>
-              <p className="fd-meta">Six fixed checks of the rules against the <b>current</b> policies. If you change a policy and a check starts failing, that is the point.</p>
-              <div className="fd-actions"><button className="pv-btn pv-btn-primary" disabled={!canEvaluate || busy !== ""} onClick={() => void runScenarios()}>{busy === "scenarios" ? "Running…" : "Run scenarios"}</button></div>
+              <small>Evaluation suite (does not record findings)</small>
+              <p className="fd-meta">Ten fixed checks of the rules against the <b>current</b> policies. If you change a policy and a check starts failing, that is the point.</p>
+              <div className="fd-actions"><button className="pv-btn pv-btn-primary" disabled={!canEvaluate || busy !== ""} onClick={() => void runScenarios()}>{busy === "scenarios" ? "Running…" : "Run evaluation"}</button>{run && <button className="pv-btn" onClick={download}>Download JSON report</button>}</div>
               {run && (
                 <>
-                  <p className="fd-meta">{run.passed} of {run.total} passed · policy revision {run.policyRevision} · {when(run.ranAt)}</p>
+                  <p className="fd-meta">{run.passed} of {run.total} passed ({run.passRate}%) · report {run.reportId} · policy revision {run.policyRevision} · {when(run.ranAt)}</p>
                   {run.results.map((r) => (
                     <div className="pv-row" key={r.id}>
                       <span className={`pv-sev ${r.passed ? "sev-low" : "sev-high"}`}>{r.passed ? "pass" : "fail"}</span>
-                      <strong>{r.name}</strong><span>expected {r.expected.replace("_", " ")}, got {r.actual.replace("_", " ")}</span>
+                      <strong>{r.name}</strong><code>{r.category}</code><span>expected {r.expected.replace("_", " ")}, got {r.actual.replace("_", " ")}</span>
                     </div>
                   ))}
-                  <p className="fd-meta">{run.note}</p>
+                  <p className="fd-meta">{run.note}</p><ul>{run.limitations.map((l, i) => <li key={i}>{l}</li>)}</ul>
                 </>
               )}
             </div>

@@ -48,7 +48,11 @@ export type VaptFindingEvent = Base & (
   | { action: "agent_status_changed"; agent: { id: string; name: string }; from: string; to: string }
   | { action: "agent_policy_changed"; policy: { id: string; name: string; condition: string; action: string }; change: "created" | "enabled" | "disabled"; policyRevision: number }
   | { action: "agent_policy_evaluated"; agentId: string; tool: string; decision: string; dataClass: string; external: boolean; policyRevision: number; reasonPolicies: string[] }
-  | { action: "agent_scenarios_run"; passed: number; total: number; policyRevision: number }
+  | { action: "agent_scenarios_run"; passed: number; total: number; policyRevision: number; reportId?: string }
+  | { action: "agent_gateway_decision"; requestId: string; agentId: string; tool: string; decision: string; status: string; approvalId: string | null; authorizedByApproval: boolean; policyRevision: number }
+  | { action: "agent_permit_consumed"; grantId: string; agentId: string; tool: string; via: string }
+  | { action: "agent_permit_rejected"; reason: string; agentId: string; tool: string }
+  | { action: "agent_approval_decided"; approvalId: string; agentId: string; tool: string; decision: string; requestedBy: string | null }
   | { action: "vapt_finding_deleted"; finding: { id: string; host: string; port: string; name: string; cves: string[] } }
   | { action: "vapt_demo_data_seeded"; findings: number; reports: number; hosts: number }
   | { action: "vapt_data_cleared"; findings: number; assets: number; reports: number }

@@ -201,6 +201,11 @@ Full detail: [day6-checklist.md](day6-checklist.md). Analysis only: it never sca
 - [x] Fixes over the supplied package: policies could shadow stricter ones and disabling one failed open; analysts could grant agents tools or disable policies (now SOC_Admin only); findings flooded on repeats; the test suite wrote findings; second log file replaced by the audit log.
 - [ ] Decides but does not enforce; no live discovery, approval queue, or real agent runtime connected; sensitivity is keyword-based.
 
+## Days 13-14: Action gateway, approvals, evaluation
+- [x] One-time permits bound to an exact action, approvals with four-eyes that actually complete the loop, ten-case evaluation report with JSON export. 51 unit tests and 54 end-to-end checks (including 20 simultaneous requests on one permit).
+- [x] Fixes over the supplied package: permits were not bound to the action they were issued for; two simultaneous requests could both spend one permit; an approved action could never proceed; a requester could approve their own request; approval requests could be flooded; the evaluation wrote ten events and findings per run.
+- [ ] Not wired into any real agent runtime (no adapter yet); local JSON state is single-process.
+
 ### Decisions and housekeeping that need you
 - [~] **Port 8010 identified:** it is your **AgenticOS** FastAPI backend (`new project langdiify/backend` on your Desktop; routers for auth, agents, workflows, approvals, knowledge, memory, audit, billing, graph and evaluation; `/docs`, `/api/system/health`). It was not running when checked. **PrimeSEC does not call it**: all Wazuh/OpenCTI/Greenbone access goes straight from Next.js server-side.
 - [ ] Decide what PrimeSEC should use the 8010 backend for (for example agent-assisted alert triage, a shared sign-in, or shared audit) before any integration is built.

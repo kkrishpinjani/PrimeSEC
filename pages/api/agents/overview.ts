@@ -3,7 +3,7 @@ import { agentGuard, fail } from "../../../lib/agentApi";
 import { readState } from "../../../lib/agentsec";
 import { readAuditEvents, type AuditAction, type AuditEvent } from "../../../lib/audit";
 
-const AGENT_ACTIONS: AuditAction[] = ["agent_registered", "agent_status_changed", "agent_policy_changed", "agent_policy_evaluated", "agent_scenarios_run"];
+const AGENT_ACTIONS: AuditAction[] = ["agent_registered", "agent_status_changed", "agent_policy_changed", "agent_policy_evaluated", "agent_scenarios_run", "agent_gateway_decision", "agent_permit_consumed", "agent_permit_rejected", "agent_approval_decided"];
 type Evaluated = Extract<AuditEvent, { action: "agent_policy_evaluated" }>;
 
 /** Summary numbers, findings and recent events for the Agent Security page (any role). */
@@ -22,7 +22,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         highPrivilege: state.agents.filter((a) => a.privileges === "high" || a.criticality === "critical").length,
         enabledPolicies: state.policies.filter((p) => p.enabled).length,
         openFindings: open.length,
-        pendingApprovals: open.filter((f) => f.status === "pending_approval").length,
+        pendingApprovals: state.approvals.filter((a) => a.status === "pending" && Date.parse(a.expiresAt) > Date.now()).length,
         recentEvaluations: evaluations.length,
         recentDenied: evaluations.filter((e) => e.decision === "DENY").length
       },

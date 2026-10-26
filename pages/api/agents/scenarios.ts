@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { agentGuard, fail } from "../../../lib/agentApi";
-import { readState, runScenarios, SCENARIOS } from "../../../lib/agentsec";
+import { EVALUATION_LIMITATIONS, readState, runScenarios, SCENARIOS } from "../../../lib/agentsec";
+import { randomBytes } from "crypto";
 import { writeAuditEvent } from "../../../lib/audit";
 import { allowRequest } from "../../../lib/rateLimit";
 import { logError } from "../../../lib/log";
@@ -13,7 +14,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const ctx = await agentGuard(req, res, req.method === "GET" ? "view" : "analyst");
   if (!ctx) return;
   try {
-    if (req.method === "GET") return res.status(200).json({ scenarios: SCENARIOS.map(({ id, name, description, expected }) => ({ id, name, description, expected })), note: NOTE, canRun: ctx.isAdmin || ctx.roles.includes("SOC_Analyst") });
+    if (req.method === "GET") return res.status(200).json({ scenarios: SCENARIOS.map(({ id, name, description, expected, category }) => ({ id, name, description, expected, category })), note: NOTE, canRun: ctx.isAdmin || ctx.roles.includes("SOC_Analyst") });
     if (!allowRequest(`agent-scenarios:${ctx.actor.email || ctx.actor.name || "unknown"}`, 20, 60_000)) {
       res.setHeader("Retry-After", "60");
       return res.status(429).json({ error: "Too many test runs. Wait a minute and try again." });
@@ -21,9 +22,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const state = await readState();
     const run = runScenarios(state);
     let auditRecorded = true;
-    try { await writeAuditEvent({ action: "agent_scenarios_run", actor: ctx.actor, passed: run.passed, total: run.total, policyRevision: state.policyRevision }); }
+    const reportId = `EVAL-${Date.now().toString(36).toUpperCase()}-${randomBytes(2).toString("hex").toUpperCase()}`;
+    try { await writeAuditEvent({ action: "agent_scenarios_run", actor: ctx.actor, passed: run.passed, total: run.total, policyRevision: state.policyRevision, reportId }); }
     catch (error) { auditRecorded = false; logError("agents: scenarios ran but the audit write failed", error); }
-    return res.status(200).json({ ranAt: new Date().toISOString(), policyRevision: state.policyRevision, ...run, note: NOTE, auditRecorded });
+    return res.status(200).json({ reportId, ranAt: new Date().toISOString(), policyRevision: state.policyRevision, ...run, note: NOTE, limitations: EVALUATION_LIMITATIONS, ranBy: ctx.actor.email || ctx.actor.name || null, auditRecorded });
   } catch (error) {
     return fail(res, error, "agent scenarios");
   }

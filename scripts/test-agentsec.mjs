@@ -18,7 +18,7 @@ const fresh = () => A.defaultState();
 
 // ---------------- the shipped scenarios ----------------
 const run = A.runScenarios(fresh());
-ok("all six built-in scenarios pass on the default policy set", run.passed === run.total && run.total === 6, JSON.stringify(run.results.filter((r) => !r.passed)));
+ok("all ten built-in evaluation cases pass on the default policy set", run.passed === run.total && run.total === 10 && run.passRate === 100, JSON.stringify(run.results.filter((r) => !r.passed)));
 
 // ---------------- core decisions ----------------
 let s = fresh();
@@ -132,7 +132,9 @@ await rejects("bad condition", () => A.createPolicy({ name: "n", description: "d
 await rejects("bad severity", () => A.createPolicy({ name: "n", description: "d", condition: "sensitive_action", action: "deny", severity: "urgent" }), "INVALID");
 const np = await A.createPolicy({ name: "Block everything sensitive", description: "strict", condition: "sensitive_action", action: "deny", severity: "high" });
 ok("created policy is enabled, unlocked and takes effect", np.enabled && !np.locked && A.evaluateAction(await A.readState(), { agentId: "agent-finance-01", tool: "payment.approve" }).decision === "DENY");
-ok("the scenario suite notices that a policy change altered behaviour", A.runScenarios(await A.readState()).passed < 6);
+ok("the scenario suite notices that a policy change altered behaviour", A.runScenarios(await A.readState()).passed < 10);
+ok("every case carries a category", A.runScenarios(fresh()).results.every((r) => r.category));
+ok("running the suite does not modify the state it is given", (() => { const st = fresh(); const before = JSON.stringify(st); A.runScenarios(st); return JSON.stringify(st) === before; })());
 
 console.log(`${pass} passed, ${fail} failed`);
 process.chdir(tmpdir());
