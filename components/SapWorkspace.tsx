@@ -134,7 +134,7 @@ export default function SapWorkspace({ user, roles }: { user: { name?: string | 
           <>
             <div className="pv-list">
               <small>Configuration to assess {canAssess ? "" : "(SOC_Analyst or SOC_Admin only)"}</small>
-              <div className="fd-edit">
+              <div className="fd-edit sap-form">
                 <label>Asset name or id<input className="fd-input" value={form.assetId} maxLength={limits?.asset ?? 128} disabled={!canAssess} placeholder="e.g. SAP-PRD-GW-01 (letters, digits . _ : -)" onChange={(e) => setForm({ ...form, assetId: e.target.value })} /></label>
                 {field("saprouttab", "saprouttab (SAProuter route table)", 'P * * *\nKP "p:CN=router" * sapdp00', limits?.saprouttab)}
                 {field("gatewayProfile", "Gateway profile parameters", "snc/enable = 0\nsnc/permit_insecure_start = 1\ngw/acl_mode = 0", limits?.gateway_profile)}

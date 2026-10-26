@@ -142,7 +142,7 @@ export default function AgentSecurityWorkspace({ user, roles }: { user: { name?:
             </div>
             <div className="pv-list">
               <small>Findings (non-allow decisions, repeats are counted not duplicated)</small>
-              {overview && overview.findings.length === 0 ? <p className="pv-empty">None yet. Use the Test lab to evaluate an action.</p> : overview?.findings.map((f) => (
+              {overview && overview.findings.length === 0 ? <p className="pv-empty">None yet. Use the Gateway or Evaluation tab to try an action.</p> : overview?.findings.map((f) => (
                 <div className="pv-row" key={f.id}>
                   <span className={`pv-sev ${DECISION_CLASS[f.decision]}`}>{f.decision.replace("_", " ")}</span>
                   <strong>{f.agentName}</strong><code>{f.tool}</code><span>×{f.count} · last {when(f.lastSeenAt)}</span>

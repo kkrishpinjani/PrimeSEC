@@ -479,3 +479,14 @@ footer { margin-top: 36px; font-size: 0.74rem; color: rgba(255,255,255,0.3); dis
 .fd-data { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .pv-btn.fd-danger { color: #fca5a5; border-color: rgba(248,113,113,0.4); }
 .pv-btn.fd-danger:hover:not(:disabled) { background: rgba(248,113,113,0.12); }
+
+/* SAP form: every field the same width, stacked label above input, checkbox beside its text */
+.sap-form { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+.sap-form label { display: flex; flex-direction: column; gap: 6px; min-width: 0; font-size: 0.74rem; }
+.sap-form .fd-input { width: 100%; box-sizing: border-box; }
+.sap-form textarea.fd-input { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.78rem; resize: vertical; }
+.sap-form label.fd-check { flex-direction: row; align-items: center; gap: 8px; }
+.sap-form label.fd-check input { width: auto; }
+@media (min-width: 900px) { .sap-form { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .sap-form > .fd-actions, .sap-form > label.fd-check { grid-column: 1 / -1; } }
+
+.sap-form > label:first-child { grid-column: 1 / -1; max-width: 520px; }
