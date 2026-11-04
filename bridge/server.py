@@ -25,6 +25,10 @@ from xml.etree import ElementTree as ET
 HOST = os.getenv("GREENBONE_BRIDGE_HOST", "127.0.0.1")
 PORT = int(os.getenv("GREENBONE_BRIDGE_PORT", "8787"))
 TOKEN = os.getenv("GREENBONE_BRIDGE_TOKEN", "")
+# Container/secret-manager friendly: read the token from a file so it never appears in the environment or `docker inspect`.
+if not TOKEN and os.getenv("GREENBONE_BRIDGE_TOKEN_FILE"):
+    with open(os.environ["GREENBONE_BRIDGE_TOKEN_FILE"], encoding="utf8") as _f:
+        TOKEN = _f.read().strip()
 SOCKET = os.getenv("GREENBONE_GMP_SOCKET", "/run/gvmd/gvmd.sock")
 GMP_USER = os.getenv("GREENBONE_GMP_USERNAME", "")
 GMP_PASSWORD = os.getenv("GREENBONE_GMP_PASSWORD", "")
@@ -122,6 +126,58 @@ def get_overview():
         "targets": parse_targets(targets),
         "tasks": parse_tasks(tasks),
         "message": "Connected to Greenbone GMP.",
+    }
+
+
+# ---- read-only scan-platform view (scanners, scan configs, port lists, schedules, alert definitions, feed status) ----
+SCANNER_TYPES = {"1": "OSP", "2": "OpenVAS", "3": "CVE"}
+
+
+def parse_scanners(root):
+    return [{"id": x.attrib.get("id", ""), "name": text(x, "name"), "type": SCANNER_TYPES.get(text(x, "type"), "type " + (text(x, "type") or "?")),
+             "host": text(x, "host"), "port": text(x, "port")} for x in root.findall(".//scanner") if x.find("name") is not None]
+
+
+def parse_configs(root):
+    return [{"id": x.attrib.get("id", ""), "name": text(x, "name"), "comment": text(x, "comment"), "nvtCount": text(x, "nvt_count"), "familyCount": text(x, "family_count")}
+            for x in root.findall(".//config") if x.find("name") is not None]
+
+
+def parse_port_lists(root):
+    return [{"id": x.attrib.get("id", ""), "name": text(x, "name"), "ports": text(x, "port_count/all")} for x in root.findall(".//port_list") if x.find("name") is not None]
+
+
+def parse_schedules(root):
+    return [{"id": x.attrib.get("id", ""), "name": text(x, "name"), "comment": text(x, "comment"), "timezone": text(x, "timezone")} for x in root.findall(".//schedule") if x.find("name") is not None]
+
+
+def parse_alert_definitions(root):
+    # Only names. The <method> element can hold secrets (webhook URLs with tokens, SMTP credentials), so its data is never read.
+    return [{"id": x.attrib.get("id", ""), "name": text(x, "name"), "event": text(x, "event"), "condition": text(x, "condition"), "method": text(x, "method"), "active": text(x, "active")}
+            for x in root.findall(".//alert") if x.find("name") is not None]
+
+
+def parse_feeds(root):
+    return [{"name": text(x, "name"), "type": text(x, "type"), "version": text(x, "version"), "syncing": x.find("currently_syncing") is not None} for x in root.findall(".//feed")]
+
+
+def platform_section(xml, parser):
+    """One failing GMP command must not hide the rest of the platform view."""
+    try:
+        return {"items": parser(cmd(xml))}
+    except BridgeError as e:
+        return {"items": [], "error": str(e)[:180]}
+
+
+def get_platform():
+    return {
+        "scanners": platform_section("<get_scanners/>", parse_scanners),
+        "configs": platform_section('<get_configs filter="rows=100 sort=name"/>', parse_configs),
+        "portLists": platform_section('<get_port_lists filter="rows=100 sort=name"/>', parse_port_lists),
+        "schedules": platform_section('<get_schedules filter="rows=100 sort=name"/>', parse_schedules),
+        "alerts": platform_section('<get_alerts filter="rows=100 sort=name"/>', parse_alert_definitions),
+        "feeds": platform_section("<get_feeds/>", parse_feeds),
+        "readOnly": True,
     }
 
 
@@ -334,6 +390,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(200, get_overview())
             if path == "/v1/findings":
                 return self.send_json(200, get_findings())
+            if path == "/v1/platform":
+                return self.send_json(200, get_platform())
             return self.send_json(404, {"error": "Not found"})
         except BridgeError as e:
             return self.send_json(502, {"error": str(e)})

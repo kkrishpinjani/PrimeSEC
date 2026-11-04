@@ -53,6 +53,15 @@ export type VaptFindingEvent = Base & (
   | { action: "agent_permit_consumed"; grantId: string; agentId: string; tool: string; via: string }
   | { action: "agent_permit_rejected"; reason: string; agentId: string; tool: string }
   | { action: "agent_approval_decided"; approvalId: string; agentId: string; tool: string; decision: string; requestedBy: string | null }
+  | { action: "inventory_ingested"; origin: "manual" | "sync"; sources: string[]; accepted: number; created: number; updated: number }
+  | { action: "sync_run"; source: string; stream: string; runId: string; status: string; recordsSeen: number; recordsIngested: number; error: string | null }
+  | { action: "response_proposed"; proposalId: string; actionType: string; target: string; links: Record<string, string> }
+  | { action: "response_reviewed"; proposalId: string; decision: "approve" | "reject"; actionType: string; target: string; proposedBy: string }
+  | { action: "response_proposal_cancelled"; proposalId: string }
+  | { action: "response_execution"; phase: string; executionId: string; proposalId: string; actionType: string; target: string; adapter: string; status: string }
+  | { action: "graph_write"; operation: string; summary: Record<string, number> }
+  | { action: "case_event"; caseId: string; caseKey: string; event: string; details: Record<string, unknown> }
+  | { action: "inventory_merge"; decision: "merged" | "dismissed"; survivor: { id: string; name: string }; absorbed: { id: string; name: string }; note: string }
   | { action: "sap_assessment_created"; assessmentId: string; assetId: string; findingCount: number; findingIds: string[]; explained: boolean }
   | { action: "vapt_finding_deleted"; finding: { id: string; host: string; port: string; name: string; cves: string[] } }
   | { action: "vapt_demo_data_seeded"; findings: number; reports: number; hosts: number }

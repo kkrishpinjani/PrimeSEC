@@ -34,6 +34,19 @@ const FILE_EXTENSIONS = new Set([
   "key", "pem", "crt", "cer", "pfx", "p12", "bak", "manifest", "resx", "nupkg", "mdb", "ldb", "lock", "pid", "sock", "socket", "service"
 ]);
 
+const CVE = /\bCVE-\d{4}-\d{4,7}\b/gi;
+const TECHNIQUE = /\bT\d{4}(?:\.\d{3})?\b/g;
+export const MAX_CVES = 10;
+
+/** CVE ids mentioned in free text, upper-cased, de-duplicated, capped. */
+export function extractCves(text: string): string[] {
+  return [...new Set((String(text || "").match(CVE) || []).map((c) => c.toUpperCase()))].slice(0, MAX_CVES);
+}
+/** MITRE ATT&CK technique ids (T1110, T1059.001) mentioned in free text, upper-cased and de-duplicated. */
+export function extractTechniques(text: string): string[] {
+  return [...new Set((String(text || "").match(TECHNIQUE) || []).map((t) => t.toUpperCase()))].slice(0, 25);
+}
+
 const norm = (v: string) => v.trim().toLowerCase();
 
 /** Pulls IPs, domains and hashes out of free text. Order-stable and de-duplicated. */

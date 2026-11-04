@@ -1,3 +1,4 @@
+import ScanPlatformPanel from "./ScanPlatformPanel";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { LogoMark } from "./Logo";
@@ -192,6 +193,7 @@ export default function VaptWorkspace({ user, roles }: { user: { name?: string |
               </div>
             ))}
           </div>
+          <ScanPlatformPanel />
           <div className="pv-list">
             <small>VAPT audit trail</small>
             {(data?.audit ?? []).length === 0 ? <p className="pv-empty">No VAPT events recorded yet.</p> : data!.audit.slice(0, 8).map((e) => {

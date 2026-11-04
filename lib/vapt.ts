@@ -201,7 +201,7 @@ type CodedError = Error & { code?: string };
 const coded = (message: string, code: string): CodedError => Object.assign(new Error(message), { code });
 
 /** Maps a bridge path to a fixed operation name for telemetry (never the raw path). */
-const bridgeOperation = (pathname: string) => (pathname.includes("overview") ? "overview" : pathname.includes("findings") ? "findings" : pathname.includes("assessments") ? "assessments" : "request");
+const bridgeOperation = (pathname: string) => (pathname.includes("overview") ? "overview" : pathname.includes("findings") ? "findings" : pathname.includes("assessments") ? "assessments" : pathname.includes("platform") ? "platform" : "request");
 
 function bridgeFetch(pathname: string, options: RequestInit = {}, timeoutMs = bridgeTimeout()): Promise<any> {
   return instrumentedCall("greenbone", bridgeOperation(pathname), () => bridgeFetchInner(pathname, options, timeoutMs));
@@ -259,6 +259,32 @@ export async function getVaptOverview(): Promise<VaptOverview> {
       status: { configured: (error as CodedError).code !== "NOT_CONFIGURED", connected: false, message: (error as Error).message || "Greenbone unavailable.", checkedAt },
       version: null, targets: [], tasks: []
     };
+  }
+}
+
+/* ---------------------- read-only scan platform (scanners, configs, schedules ...) ---------------------- */
+
+export type PlatformSection<T> = { items: T[]; error?: string };
+export type ScanPlatform = {
+  status: { configured: boolean; connected: boolean; message: string; checkedAt: string };
+  scanners: PlatformSection<{ id: string; name: string; type: string; host: string; port: string }>;
+  configs: PlatformSection<{ id: string; name: string; comment: string; nvtCount: string; familyCount: string }>;
+  portLists: PlatformSection<{ id: string; name: string; ports: string }>;
+  schedules: PlatformSection<{ id: string; name: string; comment: string; timezone: string }>;
+  alerts: PlatformSection<{ id: string; name: string; event: string; condition: string; method: string; active: string }>;
+  feeds: PlatformSection<{ name: string; type: string; version: string; syncing: boolean }>;
+};
+const emptySection = { items: [] };
+
+/** What the Greenbone instance is configured with. Read-only: nothing here creates, edits or deletes a Greenbone object. */
+export async function getScanPlatform(): Promise<ScanPlatform> {
+  const checkedAt = new Date().toISOString();
+  const section = (v: any): PlatformSection<any> => ({ items: Array.isArray(v?.items) ? v.items : [], ...(typeof v?.error === "string" ? { error: v.error } : {}) });
+  try {
+    const d = await bridgeFetch("/v1/platform");
+    return { status: { configured: true, connected: true, message: "Connected to Greenbone GMP.", checkedAt }, scanners: section(d.scanners), configs: section(d.configs), portLists: section(d.portLists), schedules: section(d.schedules), alerts: section(d.alerts), feeds: section(d.feeds) };
+  } catch (error) {
+    return { status: { configured: (error as CodedError).code !== "NOT_CONFIGURED", connected: false, message: (error as Error).message || "Greenbone unavailable.", checkedAt }, scanners: emptySection, configs: emptySection, portLists: emptySection, schedules: emptySection, alerts: emptySection, feeds: emptySection };
   }
 }
 

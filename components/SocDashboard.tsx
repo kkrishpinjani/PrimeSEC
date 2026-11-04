@@ -3,6 +3,8 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { LogoMark } from "./Logo";
+import NavMenu, { type NavGroup } from "./NavMenu";
+import type { PlatformLink } from "../pages/dashboard";
 import type { DashboardData, SectionId } from "../lib/dashboardData";
 import type { Correlation } from "../lib/correlation";
 import type { InvestigationEvent } from "../lib/audit";
@@ -101,7 +103,29 @@ type InvestigationResult = {
   alert: { id: string; level: number; description: string; agent: string; sourceIp: string };
   openCti: { configured: boolean; connected: boolean; message: string };
   correlation: Correlation;
+  vulnerabilities?: { cve: string; known: boolean | null; cvss: number | null; knownExploited: boolean | null; restricted: boolean }[];
+  techniques?: string[];
 };
+
+const WORKSPACES: NavGroup[] = [
+  { title: "Investigate", items: [
+    { label: "Cases", href: "/cases", hint: "Investigations, evidence, timeline" },
+    { label: "Wazuh data", href: "/wazuh", hint: "Agents, alerts, rules, MITRE" },
+    { label: "Threat intel", href: "/opencti", hint: "Vulnerabilities, actors, observables" },
+    { label: "Inventory", href: "/inventory", hint: "Assets, sync, duplicates, graph" }
+  ] },
+  { title: "Assess", items: [
+    { label: "VAPT", href: "/vapt", hint: "Authorised scans and findings" },
+    { label: "Risk", href: "/risk", hint: "Ranked remediation queue" },
+    { label: "CyberReasoner", href: "/cyberreasoner", hint: "Finding analysis" },
+    { label: "SAP", href: "/sap", hint: "SAP configuration risk" }
+  ] },
+  { title: "Govern", items: [
+    { label: "Response", href: "/response", hint: "Proposals, approvals, execution" },
+    { label: "Agent security", href: "/agents", hint: "Agent registry and policies" },
+    { label: "Observe", href: "/observe", hint: "Health, traces, metrics" }
+  ] }
+];
 
 const when = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleString() : "—");
 
@@ -136,7 +160,22 @@ function InvestView({
   );
 }
 
-function InvestigationPanel({ result, error }: { result: InvestigationResult | null; error: string }) {
+function InvestigationPanel({ result, error, canOpen }: { result: InvestigationResult | null; error: string; canOpen: boolean }) {
+  const [caseMsg, setCaseMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [opening, setOpening] = useState(false);
+  const openCase = async (alertId: string) => {
+    setOpening(true); setCaseMsg(null);
+    try {
+      const r = await fetch("/api/cases", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ alertId }) });
+      const b = await r.json();
+      if (!r.ok) throw new Error(b.error || "The case could not be opened.");
+      setCaseMsg({ ok: true, text: `${b.created ? "Case opened" : "Existing open case refreshed"}: ${b.case.caseKey}` });
+    } catch (e) {
+      setCaseMsg({ ok: false, text: (e as Error).message });
+    } finally {
+      setOpening(false);
+    }
+  };
   if (error) return <div className="pv-list pv-error" role="alert">{error}</div>;
   if (!result) {
     return (
@@ -159,6 +198,24 @@ function InvestigationPanel({ result, error }: { result: InvestigationResult | n
         </div>
         <div><span>Result</span><strong>{c.matchCount} potential match{c.matchCount === 1 ? "" : "es"}</strong><em>Analyst validation required</em></div>
       </div>
+      <div className="fd-actions">
+        <button className="pv-btn pv-btn-primary" disabled={!canOpen || opening} title={canOpen ? "Record this investigation as a case with an owner, evidence and a timeline" : "SOC_Analyst or SOC_Admin role required"} onClick={() => void openCase(result.alert.id)}>{opening ? "Opening…" : "Open case"}</button>
+        <Link href="/cases" className="pv-btn">Cases ↗</Link>
+        {caseMsg && <span className={caseMsg.ok ? "vapt-ok" : "pv-error"} role="status">{caseMsg.text}</span>}
+      </div>
+      {(result.vulnerabilities?.length ?? 0) > 0 && (
+        <div className="fd-card">
+          <small>CVEs in this alert, looked up in OpenCTI</small>
+          {result.vulnerabilities!.map((v) => (
+            <div className="pv-row" key={v.cve}>
+              <span className={`pv-sev ${v.knownExploited ? "sev-high" : "sev-low"}`}>{v.knownExploited ? "Exploited in the wild" : v.known ? "Known" : v.known === false ? "Not in OpenCTI" : "Unknown"}</span>
+              <strong>{v.cve}</strong>
+              <span>{v.restricted ? "Hidden by the marking policy" : v.knownExploited ? "Listed by CISA as exploited in the wild: check patch status" : v.known === false ? "OpenCTI holds no record, which says nothing about the CVE itself" : v.known === null ? "OpenCTI could not be asked" : "OpenCTI holds it; CISA does not list it as exploited"}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {(result.techniques?.length ?? 0) > 0 && <p className="pv-obs">ATT&amp;CK techniques tagged on this alert (context, not proof): {result.techniques!.map((t) => <code key={t}>{t}</code>)}</p>}
       {c.observables.length > 0 && (
         <p className="pv-obs">Checked: {c.observables.map((o) => <code key={o.type + o.value}>{o.value}</code>)}</p>
       )}
@@ -203,7 +260,7 @@ type Props = {
   data: DashboardData;
   user: { name?: string | null; email?: string | null };
   roles: string[];
-  wazuhUrl: string;
+  platforms: PlatformLink[];
   onSignOut: () => void;
 };
 
@@ -223,7 +280,7 @@ function buildNote(data: DashboardData): string {
   return parts.join(" ");
 }
 
-export default function SocDashboard({ data, user, roles, wazuhUrl, onSignOut }: Props) {
+export default function SocDashboard({ data, user, roles, platforms, onSignOut }: Props) {
   const [tab, setTab] = useState<TabId>("overview");
   const canInvestigate = roles.includes("SOC_Admin") || roles.includes("SOC_Analyst");
   const [result, setResult] = useState<InvestigationResult | null>(null);
@@ -281,15 +338,12 @@ export default function SocDashboard({ data, user, roles, wazuhUrl, onSignOut }:
         <span className="pv-chip pv-hide">Range: {data.scope.range}</span>
         <div className="pv-actions">
           <span className={`pv-live ${allLive && !data.demo ? "" : "pv-sample"}`}><i /> {badge}</span>
-          <Link href="/vapt" className="pv-btn">VAPT ↗</Link>
-          <Link href="/risk" className="pv-btn pv-hide">Risk ↗</Link>
-          <Link href="/cyberreasoner" className="pv-btn pv-hide">CyberReasoner ↗</Link>
-          <Link href="/agents" className="pv-btn pv-hide">Agent security ↗</Link>
-          <Link href="/sap" className="pv-btn pv-hide">SAP ↗</Link>
-          <Link href="/observe" className="pv-btn pv-hide">Observe ↗</Link>
-          {wazuhUrl
-            ? <a className="pv-btn" href={wazuhUrl} target="_blank" rel="noreferrer">Open Wazuh ↗</a>
-            : <span className="pv-btn pv-btn-off" title="Set WAZUH_DASHBOARD_URL in .env">Wazuh not configured</span>}
+          <NavMenu label="Workspaces" groups={WORKSPACES} />
+          <NavMenu label="Platforms" groups={[{ title: "Open the tool itself", items: platforms.map((p) => !p.url
+            ? { label: p.name, href: "", hint: p.offHint.startsWith("Set ") ? p.offHint : `Set its link in .env`, disabled: true }
+            : p.up === false
+              ? { label: p.name, href: "", hint: p.offHint, disabled: true }
+              : { label: p.name, href: p.url, hint: p.hint, external: true }) }]} />
           <span className="pv-user" title={roles.join(", ") || "No role"}>
             <span className="pv-avatar">{displayName.slice(0, 1).toUpperCase()}</span>
             <span className="pv-user-text"><b>{displayName}</b><small>{roles[0] ?? "No role"}</small></span>
@@ -343,7 +397,7 @@ export default function SocDashboard({ data, user, roles, wazuhUrl, onSignOut }:
               {tab === "invest" && (
                 <>
                   <InvestView alerts={data.investigations.alerts} canInvestigate={canInvestigate} busyId={busyId} onInvestigate={investigate} />
-                  <InvestigationPanel result={result} error={invError} />
+                  <InvestigationPanel result={result} error={invError} canOpen={canInvestigate} />
                   <AuditPanel events={audit} />
                   <StatRow items={data.investigations.stats} />
                 </>

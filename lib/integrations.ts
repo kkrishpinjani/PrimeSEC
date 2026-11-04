@@ -428,7 +428,7 @@ export async function getOpenCtiOverview(): Promise<OpenCtiOverview> {
 
 /* ------------------------- Day 3: investigation lookups ------------------------- */
 
-export type WazuhAlertDetail = { alert: WazuhAlert; text: string };
+export type WazuhAlertDetail = { alert: WazuhAlert; text: string; mitre: string[] };
 
 /** Fetches one alert from the Wazuh Indexer by its document id. Returns null when it does not exist. */
 export async function getWazuhAlertById(id: string): Promise<WazuhAlertDetail | null> {
@@ -438,7 +438,7 @@ export async function getWazuhAlertById(id: string): Promise<WazuhAlertDetail | 
     size: 1,
     query: { ids: { values: [id] } },
     // threat-relevant fields only: never the monitored host's own agent/manager addresses
-    _source: ["timestamp", "rule.level", "rule.description", "agent.name", "agent.id", "data", "syscheck", "full_log"]
+    _source: ["timestamp", "rule.level", "rule.description", "rule.mitre", "agent.name", "agent.id", "data", "syscheck", "full_log"]
   });
   const hit = body?.hits?.hits?.[0];
   if (!hit) return null;
@@ -455,7 +455,8 @@ export async function getWazuhAlertById(id: string): Promise<WazuhAlertDetail | 
     .filter(Boolean)
     .join(" ")
     .slice(0, 20000);
-  return { alert, text };
+  const mitre: string[] = Array.isArray(src.rule?.mitre?.id) ? src.rule.mitre.id.map(String) : [];
+  return { alert, text, mitre };
 }
 
 export type CtiSearchResult = { configured: boolean; connected: boolean; indicators: CtiIndicator[]; failures: number; message: string };
@@ -493,3 +494,106 @@ export async function searchOpenCtiIndicators(values: string[]): Promise<CtiSear
     message: connected ? (failures ? "Some OpenCTI searches failed; results may be incomplete." : "OpenCTI searched.") : "OpenCTI could not be reached."
   };
 }
+
+/* ------------------------- Phase II: full reads for synchronisation ------------------------- */
+
+export type WazuhAgentRecord = { id: string; name: string; status: string; ip: string | null; version: string | null; os: string | null; groups: string[] };
+export const SYNC_MAX_AGENTS = 5000;
+
+/** Every agent the Manager API lists, paged (the overview only shows the newest 10). Throws a coded error when Wazuh is not configured or unreachable. */
+export async function listWazuhAgents(): Promise<{ items: WazuhAgentRecord[]; truncated: boolean }> {
+  const { baseUrl, token } = await getWazuhToken();
+  const items: WazuhAgentRecord[] = [];
+  const pageSize = 500;
+  let total = Infinity;
+  for (let offset = 0; offset < Math.min(total, SYNC_MAX_AGENTS); offset += pageSize) {
+    const body = await wazuhApiGet(baseUrl, token, `/agents?limit=${pageSize}&offset=${offset}&sort=id&select=id,name,status,ip,version,os.name,os.version,group`);
+    const data = body?.data || body;
+    const rows: any[] = data?.affected_items || data?.items || [];
+    total = Number(data?.total_affected_items ?? rows.length);
+    for (const a of rows) {
+      const os = [a.os?.name, a.os?.version].filter(Boolean).join(" ");
+      const ip = typeof a.ip === "string" && a.ip && a.ip.toLowerCase() !== "any" ? a.ip : null;
+      items.push({ id: String(a.id ?? ""), name: String(a.name ?? ""), status: String(a.status ?? "unknown"), ip, version: a.version ? String(a.version) : null, os: os || null, groups: Array.isArray(a.group) ? a.group.map(String) : [] });
+    }
+    if (rows.length === 0) break;
+  }
+  return { items: items.filter((a) => a.id).slice(0, SYNC_MAX_AGENTS), truncated: total > SYNC_MAX_AGENTS };
+}
+
+export const OPENCTI_SYNC_ENTITIES = ["indicators", "vulnerabilities", "reports", "threat_actors", "malwares"] as const;
+export type OpenCtiSyncEntity = (typeof OPENCTI_SYNC_ENTITIES)[number];
+// Fixed query fragments chosen from this allowlist: the entity name never reaches a query as user text.
+const OPENCTI_ENTITY_QUERY: Record<OpenCtiSyncEntity, { field: string; fields: string }> = {
+  indicators: { field: "indicators", fields: "pattern pattern_type x_opencti_score created_at" },
+  vulnerabilities: { field: "vulnerabilities", fields: "description created_at" },
+  reports: { field: "reports", fields: "published created_at" },
+  threat_actors: { field: "threatActors", fields: "description created_at" },
+  malwares: { field: "malwares", fields: "description created_at" }
+};
+export type OpenCtiRecord = { id: string; name: string; markings: string[]; fields: Record<string, string | number | null> };
+
+/** One page of an OpenCTI entity type with its object markings, resuming from `after` (a cursor from the previous page). */
+export async function listOpenCtiEntities(entity: OpenCtiSyncEntity, first: number, after?: string | null): Promise<{ items: OpenCtiRecord[]; endCursor: string | null; hasNextPage: boolean }> {
+  const baseUrl = cleanBaseUrl(process.env.OPENCTI_URL);
+  const token = process.env.OPENCTI_API_TOKEN;
+  if (!baseUrl || !token) throw codedError("OpenCTI is not configured.", "NOT_CONFIGURED");
+  const spec = OPENCTI_ENTITY_QUERY[entity];
+  if (!spec) throw codedError("Unsupported OpenCTI entity type.", "INVALID");
+  const size = Math.min(Math.max(Math.floor(first) || 100, 1), 200);
+  // OpenCTI 5.x+ returns objectMarking as a plain list; some older releases return a paged connection. Try the list form first.
+  const build = (markings: string) => `query PrimeSecSync($first: Int, $after: ID) { ${spec.field}(first: $first, after: $after) { pageInfo { endCursor hasNextPage } edges { node { id name ${spec.fields} objectMarking ${markings} } } } }`;
+  const vars = { first: size, after: after || null };
+  let data: any;
+  try {
+    data = await openCtiGraphql(token, build("{ definition }"), vars);
+  } catch {
+    data = await openCtiGraphql(token, build("{ edges { node { definition } } }"), vars);
+  }
+  const conn = data?.[spec.field];
+  const keep = spec.fields.split(" ");
+  const items: OpenCtiRecord[] = nodes(conn).map((n) => ({
+    id: String(n.id),
+    name: String(n.name || ""),
+    markings: (Array.isArray(n.objectMarking) ? n.objectMarking : nodes(n.objectMarking)).map((m: { definition?: string }) => String(m?.definition || "")).filter(Boolean),
+    fields: Object.fromEntries(keep.map((k) => {
+      const v = n[k];
+      return [k, typeof v === "number" ? v : typeof v === "string" ? v.slice(0, 500) : null];
+    }))
+  }));
+  return { items, endCursor: conn?.pageInfo?.endCursor ?? null, hasNextPage: conn?.pageInfo?.hasNextPage === true };
+}
+
+/* ------------------------- Phase II: Wazuh read-only explorer ------------------------- */
+
+let apiTokenCache: { baseUrl: string; token: string; expires: number } | null = null;
+const API_TOKEN_MS = 10 * 60_000; // Wazuh tokens last 15 minutes by default; refresh earlier.
+
+/** GET against the Wazuh Manager API with a cached JWT (one retry after a 401). `path` must already be a vetted path plus query string. */
+export async function wazuhApiRequest(path: string): Promise<any> {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (!apiTokenCache || Date.now() > apiTokenCache.expires) {
+      const { baseUrl, token } = await getWazuhToken();
+      apiTokenCache = { baseUrl, token, expires: Date.now() + API_TOKEN_MS };
+    }
+    try {
+      return await wazuhApiGet(apiTokenCache.baseUrl, apiTokenCache.token, path);
+    } catch (error) {
+      if (attempt === 0 && /\(401\)/.test(String((error as Error)?.message))) { apiTokenCache = null; continue; }
+      throw error;
+    }
+  }
+}
+export const wazuhIndexerSearch = (indexPattern: string, body: unknown) => indexerSearch(indexPattern, body);
+export const wazuhIndexerReady = indexerConfigured;
+export const wazuhApiConfigured = (): boolean => Boolean(cleanBaseUrl(process.env.WAZUH_API_URL) && process.env.WAZUH_API_USERNAME && process.env.WAZUH_API_PASSWORD);
+export const wazuhSafeError = safeError;
+
+/** One OpenCTI GraphQL call with the configured read-only token. The query text is built by our own code from fixed fragments; values travel as variables. */
+export async function openCtiRequest(query: string, variables?: Record<string, unknown>): Promise<any> {
+  const baseUrl = cleanBaseUrl(process.env.OPENCTI_URL);
+  const token = process.env.OPENCTI_API_TOKEN;
+  if (!baseUrl || !token) throw codedError("OpenCTI is not configured.", "NOT_CONFIGURED");
+  return openCtiGraphql(token, query, variables);
+}
+export const openCtiConfigured = (): boolean => Boolean(cleanBaseUrl(process.env.OPENCTI_URL) && process.env.OPENCTI_API_TOKEN);
