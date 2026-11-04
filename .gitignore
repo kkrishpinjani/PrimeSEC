@@ -17,3 +17,12 @@ __pycache__/
 # build artefacts and project-local skill packs (add team skills back deliberately)
 tsconfig.tsbuildinfo
 /.claude/skills/
+
+# Local security platforms: contain private keys and default credentials
+/infra/wazuh-docker/
+/infra/greenbone/
+/infra/opencti/
+
+# local backup of .env
+.env.demo
+/infra/neo4j/

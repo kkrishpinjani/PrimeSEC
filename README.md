@@ -16,6 +16,10 @@ Stack: Next.js 15 (pages router), React 18, TypeScript, NextAuth 4 (Keycloak OID
 | **VAPT workspace** (`/vapt`) | `SOC_Admin` approves a scope with a written authorization reference and an expiry; scans can start only inside it. Every approval, revocation, launch and refusal is audited. |
 | **Findings** (`/vapt/findings`) | Greenbone results imported and de-duplicated, with remediation status, owner and notes, a retest request, and a "not in latest scan" flag that helps verify fixes. It records work; it never changes a host. |
 | **Risk & validation** (`/risk`) | An explainable risk-ranked remediation queue (with a "why this score?" breakdown, where unknown inputs stay unknown and widen a score range) and a retest comparison that says "fixed" only with proof. Analysis only: it never scans or closes anything. |
+| **Asset inventory** (`/inventory`) | One record per asset from Wazuh and Greenbone, merged only on durable ids, with a documented exposure score. Start syncs (Wazuh, Greenbone findings, OpenCTI) with run history, and a Neo4j graph tab. Read-only toward every platform. See [docs/phase2.md](docs/phase2.md). |
+| **Governed response** (`/response`) | Propose, a different admin approves, execute under policy gates with idempotency, verify, roll back. **Off by default and no adapter ships**, so it cannot act on any system as delivered. |
+| **Cases** (`/cases`) | The written record of an investigation: owner, status lifecycle, evidence, a timeline of who did what, a rule-based plan, and response proposals tied to the case. Open one from an investigated alert. Records work; changes no system. |
+| **Wazuh data** (`/wazuh`) and **Intel** (`/opencti`) | Read-only explorers over Wazuh (agents, file integrity, SCA, alerts, rules, MITRE) and OpenCTI (vulnerabilities, actors, malware, observables), with a marking policy on the intelligence. |
 | **Landing page** (`/`) | Public page with the globe. |
 | **Health** (`/api/health`) | Local health check. |
 
