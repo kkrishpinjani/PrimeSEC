@@ -1,10 +1,12 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { agentGuard } from "../../../lib/agentApi";
 import { listExecutions, listProposals, responseStatus } from "../../../lib/response";
+import { ensureAdapters } from "../../../lib/responseAdapters";
 import { logError } from "../../../lib/log";
 
 /** Governed-response overview: whether execution is on, the allow-list, registered adapters, proposals and executions. Any PrimeSEC role. */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  ensureAdapters();
   if (req.method !== "GET") { res.setHeader("Allow", "GET"); return res.status(405).json({ error: "Method not allowed" }); }
   const ctx = await agentGuard(req, res, "view");
   if (!ctx) return;

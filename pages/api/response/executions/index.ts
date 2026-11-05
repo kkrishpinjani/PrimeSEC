@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { agentGuard } from "../../../../lib/agentApi";
 import { executeProposal, type Phase } from "../../../../lib/response";
+import { ensureAdapters } from "../../../../lib/responseAdapters";
 import { respFail } from "../../../../lib/responseApi";
 import { writeAuditEvent } from "../../../../lib/audit";
 import { allowRequest } from "../../../../lib/rateLimit";
@@ -11,6 +12,7 @@ import { allowRequest } from "../../../../lib/rateLimit";
  * is called, and if it cannot be written nothing is executed.
  */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  ensureAdapters();
   if (req.method !== "POST") { res.setHeader("Allow", "POST"); return res.status(405).json({ error: "Method not allowed" }); }
   const ctx = await agentGuard(req, res, "admin");
   if (!ctx) return;

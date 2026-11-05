@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { LogoMark } from "./Logo";
+import GraphDiagram from "./GraphDiagram";
 import { fullSignOut } from "../lib/signOutClient";
 import type { AssetRow, DetailVuln, InventoryAsset, Observation, StaleSource } from "../lib/inventory";
 import type { IntelObject, SyncRun, Watermark } from "../lib/sync";
@@ -71,7 +72,9 @@ export default function InventoryWorkspace({ user, roles }: { user: { name?: str
     setGraph(r.body);
     if (r.body.reachable) {
       const e = await call("/api/graph?view=exposure&limit=50");
-      if (e.ok) setExposure(e.body.items);
+      // A failed graph query still answers 200, with a message and no items.
+      if (e.ok && e.body.reachable === false) setGraph(e.body);
+      setExposure(e.ok && Array.isArray(e.body.items) ? e.body.items : []);
     }
   }, [call]);
   async function graphWrite(action: "schema" | "project") {
@@ -87,6 +90,7 @@ export default function InventoryWorkspace({ user, roles }: { user: { name?: str
     const r = await call(`/api/graph?view=paths&asset=${encodeURIComponent(asset)}&limit=25`);
     setBusy("");
     if (!r.ok) return setError(r.body.error || "Could not read paths.");
+    if (!Array.isArray(r.body.paths)) return setError(r.body.message || "Could not read paths.");
     setPaths({ asset, items: r.body.paths });
   }
 
@@ -276,7 +280,7 @@ export default function InventoryWorkspace({ user, roles }: { user: { name?: str
                   <button className="pv-btn pv-btn-primary" disabled={!isAdmin || busy !== ""} onClick={() => void graphWrite("project")}>{busy === "graph-project" ? "Projecting…" : "Project inventory into graph"}</button>
                 </div>
                 {exposure.length === 0 ? <p className="pv-empty">The graph has no assets yet. Project the inventory (SOC_Admin).</p> : exposure.map((x) => (
-                  <div className="pv-row" key={x.assetId}>
+                  <div className="pv-row pv-row-graph" key={x.assetId}>
                     <strong>{x.name}</strong>
                     <span>{x.vulnerabilityCount} open vulnerabilit{x.vulnerabilityCount === 1 ? "y" : "ies"}{x.vulnerabilities.length ? ` · ${x.vulnerabilities.slice(0, 3).map((v) => v.cve ?? v.id).join(", ")}` : ""}</span>
                     <button className="pv-btn" disabled={busy !== ""} onClick={() => void showPaths(x.assetId)}>Paths</button>
@@ -284,8 +288,16 @@ export default function InventoryWorkspace({ user, roles }: { user: { name?: str
                 ))}
                 {paths && (
                   <div className="fd-card">
-                    <div className="fd-head"><strong className="fd-name">Connections from {paths.asset}</strong></div>
-                    {paths.items.length === 0 ? <p className="pv-empty">No connections found.</p> : paths.items.map((p, i) => <p className="fd-meta" key={i}>{p.nodes.map((n, j) => <span key={j}>{j > 0 ? ` —${p.relationships[j - 1]}→ ` : ""}<b>{n.name}</b></span>)}</p>)}
+                    <div className="fd-head"><strong className="fd-name">Connections from {exposure.find((x) => x.assetId === paths.asset)?.name ?? paths.asset}</strong></div>
+                    {paths.items.length === 0 ? <p className="pv-empty">No connections found.</p> : (
+                      <>
+                        <GraphDiagram paths={paths.items} label={`Connections from ${paths.asset}`} />
+                        <details className="gd-text">
+                          <summary>Show as text</summary>
+                          {paths.items.map((p, i) => <p className="fd-meta" key={i}>{p.nodes.map((n, j) => <span key={j}>{j > 0 ? ` —${p.relationships[j - 1]}→ ` : ""}<b>{n.name}</b></span>)}</p>)}
+                        </details>
+                      </>
+                    )}
                   </div>
                 )}
               </>

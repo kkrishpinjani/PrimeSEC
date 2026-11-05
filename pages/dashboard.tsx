@@ -1,3 +1,4 @@
+import net from "node:net";
 import Head from "next/head";
 import type { GetServerSideProps } from "next";
 import { getServerSession } from "next-auth/next";
@@ -48,15 +49,28 @@ async function reachable(url: string): Promise<boolean> {
 }
 const base = (v: string | undefined) => String(v || "").trim().replace(/\/+$/, "");
 
+/** Wazuh's dashboard uses its own certificate, which an HTTPS probe would (rightly) reject, so check that the port accepts a connection instead. */
+function portOpen(url: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    let u: URL;
+    try { u = new URL(url); } catch { return resolve(false); }
+    const socket = net.connect({ host: u.hostname, port: Number(u.port) || (u.protocol === "https:" ? 443 : 80) });
+    const done = (ok: boolean) => { socket.destroy(); resolve(ok); };
+    socket.setTimeout(1500, () => done(false));
+    socket.once("connect", () => done(true));
+    socket.once("error", () => done(false));
+  });
+}
+
 async function platformLinks(): Promise<PlatformLink[]> {
-  const [greenbone, opencti, neo4j] = await Promise.all([
+  const [wazuh, greenbone, opencti, neo4j] = await Promise.all([
+    portOpen(base(process.env.WAZUH_DASHBOARD_URL)),
     reachable(base(process.env.GREENBONE_BRIDGE_URL) && `${base(process.env.GREENBONE_BRIDGE_URL)}/health`),
     reachable(base(process.env.OPENCTI_URL)),
     reachable(base(process.env.NEO4J_HTTP_URL))
   ]);
   return [
-    // Wazuh's dashboard uses its own certificate, which a server-side probe would reject; its stack is not one that gets swapped out.
-    { name: "Wazuh", url: process.env.WAZUH_DASHBOARD_URL || "", hint: "Dashboard, agents, alerts", up: null, offHint: "Set WAZUH_DASHBOARD_URL in .env" },
+    { name: "Wazuh", url: process.env.WAZUH_DASHBOARD_URL || "", hint: "Dashboard, agents, alerts", up: process.env.WAZUH_DASHBOARD_URL ? wazuh : null, offHint: process.env.WAZUH_DASHBOARD_URL ? "Not running. Start it with: scripts\\stacks.ps1 use-all" : "Set WAZUH_DASHBOARD_URL in .env" },
     { name: "Greenbone", url: process.env.GREENBONE_DASHBOARD_URL || "", hint: "Scans and reports", up: greenbone, offHint: "Not running. Start it with: scripts\\stacks.ps1 use-greenbone" },
     { name: "OpenCTI", url: process.env.OPENCTI_DASHBOARD_URL || "", hint: "Threat intelligence platform", up: opencti, offHint: "Not running. Start it with: scripts\\stacks.ps1 use-opencti" },
     { name: "Neo4j", url: process.env.NEO4J_BROWSER_URL || "", hint: "Graph browser (login: neo4j)", up: neo4j, offHint: "Not running. Start it in infra\\neo4j: docker compose up -d" }

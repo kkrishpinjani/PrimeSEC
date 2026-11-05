@@ -11,7 +11,7 @@ Source: `PhaseII.zip` (nine cumulative Python/FastAPI builds plus the Wazuh inte
 | 3c | OpenVAS console | **Extended**: a read-only view of scanners, scan configs, port lists, schedules, alert definitions (names only) and feed status. | `bridge/server.py`, `lib/vapt.ts`, `ScanPlatformPanel` |
 | 4 | Unified asset intelligence v1.4 | **New**: canonical inventory, identity matching, vulnerability dedup, exposure score. | `lib/inventory.ts`, `/inventory`, `/api/inventory` |
 | 5 | Continuous sync v1.5 | **New**: Wazuh, Greenbone-findings and OpenCTI sync with run history, watermarks and an overlap guard. | `lib/sync.ts`, `lib/syncSources.ts`, `/api/sync` |
-| 6 | Governed response engine | **New**: proposals, separate approver, policy gates, idempotent execution, verify, rollback. **Execution is off and no adapter ships.** | `lib/response.ts`, `/response`, `/api/response/*` |
+| 6 | Governed response engine | **New**: proposals, separate approver, policy gates, idempotent execution, verify, rollback. **Execution is off.** The only adapter that ships acts inside PrimeSEC alone (`watch_asset`, see below). | `lib/response.ts`, `/response`, `/api/response/*` |
 | 7 | Neo4j security graph | **New**: allow-listed labels, namespaced nodes, atomic upsert, exposure and path queries, projection from the inventory. | `lib/graph.ts`, `/inventory` (Graph tab), `/api/graph/*` |
 
 Tests: `npm run test:inventory | test:sync | test:response | test:graph | test:cases | test:wazuh | test:opencti | test:investigate | test:bridge | test:scheduler` (about 420 checks). `npm test` runs all 21 suites.
@@ -43,6 +43,12 @@ Fixed rather than copied:
 - **Investigation plans are rule-based checklists**, not AI. Technique ids from alerts are shown for context and are deliberately not used to match indicators.
 - Wazuh and OpenCTI explorers and cases are visible to every PrimeSEC role; changing a case needs SOC_Analyst or SOC_Admin.
 - Neo4j Community has no role-based access control: PrimeSEC uses its single built-in user, on a loopback-only port.
+
+## The one adapter that ships: `watch_asset`
+
+`lib/responseAdapters.ts` registers an adapter named `inventory-watch` the first time the response API is used. It supports a single action, `watch_asset`, whose target is an inventory asset id. Executing it adds the tag `watchlist` to that asset; verify checks the tag is present; rollback removes it, but only when that execution is the one that added it.
+
+It touches no other system, and it is still inert until an administrator sets `RESPONSE_EXECUTION_ENABLED=true` and lists `watch_asset` in `RESPONSE_ALLOWED_ACTIONS`. The approval rules (a different admin approves, approvals expire, idempotency key required) apply to it like any other action. It exists so the whole Response page can be exercised end to end without any risk. Acting on real systems (blocking an address, isolating a host) still needs its own adapter.
 
 ## Turning on a real response action (do not do this casually)
 
@@ -126,3 +132,8 @@ All four platforms run together in an 11 GB Docker allocation (`~/.wslconfig`: `
 - **Sync scheduler.** `SYNC_SCHEDULE_MINUTES` (5 to 1440) runs the same read-only syncs automatically, first pass a minute after start-up, recorded in history and audit as "scheduler". It never calls Greenbone and never starts a scan.
 - **Wazuh text search** was returning 400 because OpenSearch rejects a multi-field query across mixed field types; it is now lenient.
 - **Stack swapping and a fixed lab address.** `scripts\stacks.ps1 status | use-greenbone | use-opencti` swaps the two heavy stacks and, for Greenbone, attaches the lab container at the fixed address `192.168.16.200` on a subnet declared in `compose.bridge.yaml` (Docker only allows a fixed address on a network with an explicit subnet, so the network was recreated once; volumes were kept) and sets the bridge allow-list to exactly that address. Verified: the address survives a container restart. A SOC_Admin must still approve a PrimeSEC scope for it before anything is scanned.
+
+## Final frontend pass
+
+- **Wazuh in the Platforms menu** is now checked with a plain TCP connect to the dashboard port (an HTTPS probe would reject its self-signed certificate), so it greys out like the others when the stack is down.
+- **Graph tab** draws the connections from an asset as a diagram (`components/GraphDiagram.tsx`, plain SVG, no dependency), with the text form kept under "Show as text".

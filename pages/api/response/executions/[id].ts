@@ -1,11 +1,13 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { agentGuard } from "../../../../lib/agentApi";
 import { rollbackExecution, verifyExecution, type Execution, type Phase } from "../../../../lib/response";
+import { ensureAdapters } from "../../../../lib/responseAdapters";
 import { respFail } from "../../../../lib/responseApi";
 import { writeAuditEvent } from "../../../../lib/audit";
 
 /** POST { action: "verify" | "rollback" } on an execution. SOC_Admin only; audited. */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  ensureAdapters();
   if (req.method !== "POST") { res.setHeader("Allow", "POST"); return res.status(405).json({ error: "Method not allowed" }); }
   const ctx = await agentGuard(req, res, "admin");
   if (!ctx) return;

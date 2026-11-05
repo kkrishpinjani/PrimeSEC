@@ -83,8 +83,8 @@ export default function ResponseWorkspace({ user, roles }: { user: { name?: stri
         <div className="pv-list">
           <small>Propose an action {canPropose ? "" : "(SOC_Analyst or SOC_Admin only)"}. A proposal acts on nothing; it asks for review.</small>
           <div className="fd-edit sap-form">
-            <label>Action type<input className="fd-input" value={form.actionType} maxLength={41} disabled={!canPropose} placeholder="e.g. block_ip" onChange={(e) => setForm({ ...form, actionType: e.target.value })} /></label>
-            <label>Target<input className="fd-input" value={form.target} maxLength={300} disabled={!canPropose} placeholder="e.g. 198.51.100.7" onChange={(e) => setForm({ ...form, target: e.target.value })} /></label>
+            <label>Action type<input className="fd-input" value={form.actionType} maxLength={41} disabled={!canPropose} placeholder="e.g. watch_asset" onChange={(e) => setForm({ ...form, actionType: e.target.value })} /></label>
+            <label>Target<input className="fd-input" value={form.target} maxLength={300} disabled={!canPropose} placeholder="e.g. an inventory asset id" onChange={(e) => setForm({ ...form, target: e.target.value })} /></label>
             <label>Why (the reviewer reads this)<textarea className="fd-input" rows={3} value={form.rationale} maxLength={1000} disabled={!canPropose} onChange={(e) => setForm({ ...form, rationale: e.target.value })} /></label>
             <div className="fd-actions"><button className="pv-btn pv-btn-primary" disabled={!canPropose || busy !== "" || !form.actionType || !form.target || form.rationale.trim().length < 10} onClick={() => void propose()}>{busy === "propose" ? "Saving…" : "Submit proposal"}</button></div>
           </div>

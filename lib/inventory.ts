@@ -235,6 +235,19 @@ function withStore<T>(fn: (store: InventoryStore) => { store: InventoryStore; re
   return run;
 }
 
+/** Adds or removes one tag on one asset. Returns whether the asset's tags changed (so a caller can tell a re-run from a first run). */
+export async function setAssetTag(assetId: string, tag: string, on: boolean, now = new Date().toISOString()): Promise<{ found: boolean; changed: boolean }> {
+  return withStore<{ found: boolean; changed: boolean }>((s) => {
+    const asset = s.assets.find((a) => a.id === assetId);
+    if (!asset) return { store: s, result: { found: false, changed: false } };
+    const has = asset.tags.includes(tag);
+    if (has === on) return { store: s, result: { found: true, changed: false } };
+    asset.tags = on ? [...asset.tags, tag].sort() : asset.tags.filter((t) => t !== tag);
+    asset.updatedAt = now;
+    return { store: s, result: { found: true, changed: true } };
+  });
+}
+
 export async function clearInventory(): Promise<number> {
   return withStore((s) => ({ store: EMPTY(), result: s.assets.length }));
 }
