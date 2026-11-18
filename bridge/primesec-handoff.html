@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Signing in to Greenbone</title>
+<style>body{font:15px system-ui,sans-serif;background:#040d0d;color:#ecfdfa;max-width:34rem;margin:14vh auto;padding:0 16px}a{color:#5eead4}</style>
+</head>
+<body>
+<p id="msg">Signing you in to Greenbone…</p>
+<script>
+/* Served by Greenbone's own nginx (mounted from PrimeSEC's bridge folder) so it can write the browser storage the Greenbone web app
+   reads. PrimeSEC passes the short-lived session in the URL fragment, which is never sent to a server or written to a log, and this
+   page removes it from the address bar at once. The Greenbone password is never in the page. */
+(function () {
+  var h = new URLSearchParams(location.hash.slice(1));
+  var token = h.get("t"), user = h.get("u"), expires = Number(h.get("e")), sid = h.get("s");
+  history.replaceState(null, "", location.pathname);
+  var msg = document.getElementById("msg");
+  if (!token || !user || !expires) { msg.textContent = "This page is opened by PrimeSEC. Use the Greenbone link on the PrimeSEC dashboard."; return; }
+  try {
+    localStorage.setItem("token", token);
+    localStorage.setItem("username", user);
+    localStorage.setItem("sessionTimeout", new Date(expires).toISOString());
+    if (sid) document.cookie = "GSAD_SID=" + encodeURIComponent(sid) + "; path=/; SameSite=Strict; Secure; max-age=900";
+  } catch (e) { msg.textContent = "This browser would not store the session. Sign in on the Greenbone page instead."; return; }
+  location.replace("/");
+})();
+</script>
+</body>
+</html>

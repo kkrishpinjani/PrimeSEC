@@ -1,0 +1,39 @@
+# PrimeSEC <-> Greenbone bridge, run beside Greenbone so it can reach the gvmd socket volume.
+# Use together with the official file:  docker compose -f compose.yaml -f compose.bridge.yaml up -d
+# Published on 127.0.0.1 only. The GMP password sits in secrets/gvm-cli.conf (read-only mount), never in the process list.
+services:
+  primesec-bridge:
+    image: registry.community.greenbone.net/community/gvm-tools
+    entrypoint: ["python3", "/bridge/server.py"]
+    user: "65534:65534"
+    restart: unless-stopped
+    environment:
+      GREENBONE_BRIDGE_HOST: 0.0.0.0
+      GREENBONE_BRIDGE_PORT: "8787"
+      GREENBONE_BRIDGE_TOKEN_FILE: /run/secrets/bridge-token
+      GREENBONE_GMP_SOCKET: /run/gvmd/gvmd.sock
+      # Lets PrimeSEC sign an administrator into the Greenbone web interface (POST /v1/session). gsad speaks plain HTTP on this network only.
+      GREENBONE_GSAD_URL: http://gsad:9392
+      # The address nginx reports for a browser on this machine (the Docker network's gateway). See bridge/server.py.
+      GREENBONE_WEB_CLIENT_ADDRESS: 192.168.16.1
+      GVM_CLI_CONFIG: /run/secrets/gvm-cli.conf
+      GVM_CLI_PATH: gvm-cli
+      # Second allow-list owned by whoever runs Greenbone: only the lab network may ever be scanned.
+      GREENBONE_ALLOWED_RANGES: ${GREENBONE_ALLOWED_RANGES:-172.16.0.0/12}
+    volumes:
+      - ../../bridge:/bridge:ro
+      - gvmd_socket_vol:/run/gvmd
+      - ./secrets/gvm-cli.conf:/run/secrets/gvm-cli.conf:ro
+      - ./secrets/bridge-token:/run/secrets/bridge-token:ro
+    ports:
+      - 127.0.0.1:8787:8787
+    depends_on:
+      - gvmd
+
+# An explicit subnet is what lets the lab container be attached at a FIXED address (docker network connect --ip works only on networks
+# with a user-configured subnet). See scripts/stacks.ps1.
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: 192.168.16.0/24

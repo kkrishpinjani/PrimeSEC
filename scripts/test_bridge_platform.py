@@ -58,5 +58,50 @@ B.cmd = lambda xml: (sent.append(xml), X("<r/>"))[1]
 B.get_platform()
 ok("only get_* commands are sent", len(sent) == 6 and all(c.startswith("<get_") for c in sent), str(sent))
 
+# ---- web sign-in session (POST /v1/session) ----
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
+
+seen = {}
+class FakeGsad(BaseHTTPRequestHandler):
+    def log_message(self, *a): pass
+    def do_POST(self):
+        seen["path"] = self.path
+        seen["real_ip"] = self.headers.get("X-Real-IP")
+        seen["body"] = self.rfile.read(int(self.headers.get("Content-Length", "0"))).decode()
+        if "wrong-pass" in seen["body"]:
+            self.send_response(401); self.end_headers(); return
+        self.send_response(200)
+        self.send_header("Set-Cookie", "GSAD_SID=sid-123; path=/; HTTPonly")
+        self.end_headers()
+        self.wfile.write(b"<envelope><token>tok-456</token><duration>900</duration></envelope>")
+srv = HTTPServer(("127.0.0.1", 0), FakeGsad)
+threading.Thread(target=srv.serve_forever, daemon=True).start()
+B.GSAD_URL = f"http://127.0.0.1:{srv.server_port}"
+B.GMP_USER, B.GMP_PASSWORD = "svc", "right-pass"
+
+B.GSAD_URL_SAVED, B.GSAD_URL = B.GSAD_URL, ""
+try:
+    B.web_session(); ok("web sign-in is refused while GREENBONE_GSAD_URL is unset", False)
+except B.BridgeError:
+    ok("web sign-in is refused while GREENBONE_GSAD_URL is unset", True)
+B.GSAD_URL = B.GSAD_URL_SAVED
+
+B.WEB_CLIENT_ADDRESS = "192.168.16.1"
+sess = B.web_session()
+ok("the session carries token, user, cookie and an expiry about 15 minutes out", sess["token"] == "tok-456" and sess["username"] == "svc" and sess["sid"] == "sid-123" and 800_000 < sess["expiresAt"] - B.time.time() * 1000 < 1_000_000, str(sess))
+ok("it posts the login form to gsad's /login", seen["path"] == "/login" and 'name="login"' in seen["body"] and 'name="password"' in seen["body"])
+ok("it asks gsad to bind the session to the browser's address", seen["real_ip"] == "192.168.16.1")
+B.WEB_CLIENT_ADDRESS = ""
+B.web_session()
+ok("without a configured address no X-Real-IP is sent", seen["real_ip"] is None)
+B.GMP_PASSWORD = "wrong-pass"
+try:
+    B.web_session(); ok("a refused login is reported, not passed on", False)
+except B.BridgeError as e:
+    ok("a refused login is reported, not passed on", "refused" in str(e) and "wrong-pass" not in str(e))
+ok("the password is never in the session handed back", "right-pass" not in str(sess))
+srv.shutdown()
+
 print(f"bridge platform: {passed} passed, {failed} failed")
 sys.exit(1 if failed else 0)

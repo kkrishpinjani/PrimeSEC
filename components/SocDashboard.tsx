@@ -343,7 +343,7 @@ export default function SocDashboard({ data, user, roles, platforms, onSignOut }
             ? { label: p.name, href: "", hint: p.offHint.startsWith("Set ") ? p.offHint : `Set its link in .env`, disabled: true }
             : p.up === false
               ? { label: p.name, href: "", hint: p.offHint, disabled: true }
-              : { label: p.name, href: p.url, hint: p.hint, external: true }) }]} />
+              : { label: p.name, href: roles.includes("SOC_Admin") && p.launchUrl ? p.launchUrl : p.url, hint: roles.includes("SOC_Admin") && p.launchUrl ? `${p.hint} · signs you in` : p.hint, external: true }) }]} />
           <span className="pv-user" title={roles.join(", ") || "No role"}>
             <span className="pv-avatar">{displayName.slice(0, 1).toUpperCase()}</span>
             <span className="pv-user-text"><b>{displayName}</b><small>{roles[0] ?? "No role"}</small></span>

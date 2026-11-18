@@ -60,6 +60,7 @@ export type VaptFindingEvent = Base & (
   | { action: "response_proposal_cancelled"; proposalId: string }
   | { action: "response_execution"; phase: string; executionId: string; proposalId: string; actionType: string; target: string; adapter: string; status: string }
   | { action: "graph_write"; operation: string; summary: Record<string, number> }
+  | { action: "platform_launch"; platform: string; outcome: "opened" | "failed"; reason?: string }
   | { action: "case_event"; caseId: string; caseKey: string; event: string; details: Record<string, unknown> }
   | { action: "inventory_merge"; decision: "merged" | "dismissed"; survivor: { id: string; name: string }; absorbed: { id: string; name: string }; note: string }
   | { action: "sap_assessment_created"; assessmentId: string; assetId: string; findingCount: number; findingIds: string[]; explained: boolean }

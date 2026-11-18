@@ -137,3 +137,27 @@ All four platforms run together in an 11 GB Docker allocation (`~/.wslconfig`: `
 
 - **Wazuh in the Platforms menu** is now checked with a plain TCP connect to the dashboard port (an HTTPS probe would reject its self-signed certificate), so it greys out like the others when the stack is down.
 - **Graph tab** draws the connections from an asset as a diagram (`components/GraphDiagram.tsx`, plain SVG, no dependency), with the text form kept under "Show as text".
+
+## One-click launch of the platforms (no typing of logins)
+
+The dashboard's **Platforms** menu opens each tool already signed in, for a **SOC_Admin** (other roles get the plain link and must log in themselves). The link is `/api/launch/<opencti|wazuh|greenbone|neo4j>`. PrimeSEC checks the administrator role, a same-origin navigation (`Sec-Fetch-Site`), a rate limit (20 a minute) and writes a `platform_launch` audit event, then signs in **on the server** and redirects. The browser never receives a password.
+
+| Platform | How the session is handed over |
+|---|---|
+| OpenCTI | Server-side GraphQL login (`LAUNCH_OPENCTI_*` in `.env`); the `opencti_session` cookie is re-issued on the PrimeSEC response. Browsers share cookies between ports of one host, so `OPENCTI_DASHBOARD_URL` must use the same host name as PrimeSEC (`localhost`). The login is proven by reading the user with that cookie before anything is handed over. |
+| Wazuh | Server-side login to the dashboard (`LAUNCH_WAZUH_*`); the `security_authentication` cookie is re-issued. The dashboard certificate only names `wazuh.dashboard`, so the request connects to the local port and verifies against that name (`WAZUH_DASHBOARD_TLS_NAME`); verification is never turned off. |
+| Greenbone | Its web app keeps the token in browser storage, not a cookie, and gsad ties a session to the address it was created from. The bridge (`POST /v1/session`, needs `GREENBONE_GSAD_URL` and `GREENBONE_WEB_CLIENT_ADDRESS`) logs in on the Docker network as that address and returns the token; PrimeSEC redirects to `/primesec-handoff.html#...` on Greenbone's own origin, which writes the storage and clears the address bar. `scripts\stacks.ps1` installs that page (`bridge/primesec-handoff.html`) into Greenbone's web volume. The session is the bridge's `primesec` GMP user and lasts about 15 minutes without activity. |
+| Neo4j | Its login is switched off (`NEO4J_AUTH: none` in `infra/neo4j/compose.yaml`; both ports are published on 127.0.0.1 only). The link opens the browser pointed at the database; Neo4j Browser cannot connect by itself, so it is one click on **Connect**. To turn the login back on, set `NEO4J_AUTH` to `neo4j/<password>`. |
+
+Things to know:
+- The stored accounts are platform **administrators** (OpenCTI admin, Wazuh `admin`, Greenbone `primesec`), so every SOC_Admin gets that power in the platform's own UI. The audit trail records who launched what; the platforms themselves see only the shared account.
+- The accounts live in `.env` (git-ignored). Leave a `LAUNCH_*` pair blank to keep that platform's own login.
+- Nothing here weakens TLS. The Greenbone certificate is not issued by a CA the server can verify, which is why its sign-in goes through the bridge instead of a server-to-server call.
+
+## Lab host after a restart
+
+The lab container (`wazuh-agent-lab`) starts only the Wazuh agent. Its SSH server and syslog service (rsyslog, which writes the line format Wazuh's SSH rules read) are started by `scripts\stacks.ps1 lab`, and also by `use-all` / `use-greenbone`. `scripts\stacks.ps1 status` shows whether they are up. The work is done by `scripts/lab-services.sh`, run inside the container; it only starts what is missing and ignores finished (`<defunct>`) sshd children. To test detection: `docker exec wazuh-agent-lab sh -c "for i in 1 2 3; do ssh -o StrictHostKeyChecking=no -o BatchMode=yes nouser@127.0.0.1 true; done"` should raise rule 5710 within seconds.
+
+## Starting everything after a PC restart
+
+Run one command from the project folder: `.\scripts\start-all.ps1`. It starts Docker Desktop if needed and waits for its engine, brings up Wazuh, OpenCTI, Greenbone and Neo4j (`stacks.ps1 use-all`, which also re-attaches the lab host and restarts its SSH and syslog), then starts the app (`dev-real.ps1`). It is safe to run when things are already up (about 10 seconds then). `-NoApp` skips the app. `-InstallAutostart` registers a Windows scheduled task that runs it a minute after you sign in; `-RemoveAutostart` undoes that. If Docker's engine keeps answering "500 Internal Server Error", quit Docker Desktop, run `wsl --shutdown` and run the script again.

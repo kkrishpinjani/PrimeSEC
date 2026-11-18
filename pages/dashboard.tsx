@@ -35,7 +35,7 @@ export default function Dashboard({ user, roles, platforms, data }: Props) {
   );
 }
 
-export type PlatformLink = { name: string; url: string; hint: string; /** null = not probed (assumed up) */ up: boolean | null; offHint: string };
+export type PlatformLink = { name: string; url: string; /** Signs a SOC_Admin straight in, when the account is set in .env (see lib/launch.ts). */ launchUrl?: string; hint: string; /** null = not probed (assumed up) */ up: boolean | null; offHint: string };
 
 /** A quick, quiet reachability probe. Never throws; a platform that does not answer in 1.5 s counts as down. */
 async function reachable(url: string): Promise<boolean> {
@@ -69,12 +69,20 @@ async function platformLinks(): Promise<PlatformLink[]> {
     reachable(base(process.env.OPENCTI_URL)),
     reachable(base(process.env.NEO4J_HTTP_URL))
   ]);
-  return [
+  const e = process.env;
+  const can = {
+    wazuh: Boolean(e.LAUNCH_WAZUH_USERNAME && e.LAUNCH_WAZUH_PASSWORD),
+    opencti: Boolean(e.LAUNCH_OPENCTI_EMAIL && e.LAUNCH_OPENCTI_PASSWORD),
+    greenbone: Boolean(e.GREENBONE_BRIDGE_URL && e.GREENBONE_BRIDGE_TOKEN),
+    neo4j: Boolean(e.NEO4J_BROWSER_URL)
+  };
+  const links = [
     { name: "Wazuh", url: process.env.WAZUH_DASHBOARD_URL || "", hint: "Dashboard, agents, alerts", up: process.env.WAZUH_DASHBOARD_URL ? wazuh : null, offHint: process.env.WAZUH_DASHBOARD_URL ? "Not running. Start it with: scripts\\stacks.ps1 use-all" : "Set WAZUH_DASHBOARD_URL in .env" },
     { name: "Greenbone", url: process.env.GREENBONE_DASHBOARD_URL || "", hint: "Scans and reports", up: greenbone, offHint: "Not running. Start it with: scripts\\stacks.ps1 use-greenbone" },
     { name: "OpenCTI", url: process.env.OPENCTI_DASHBOARD_URL || "", hint: "Threat intelligence platform", up: opencti, offHint: "Not running. Start it with: scripts\\stacks.ps1 use-opencti" },
-    { name: "Neo4j", url: process.env.NEO4J_BROWSER_URL || "", hint: "Graph browser (login: neo4j)", up: neo4j, offHint: "Not running. Start it in infra\\neo4j: docker compose up -d" }
+    { name: "Neo4j", url: process.env.NEO4J_BROWSER_URL || "", hint: "Graph browser", up: neo4j, offHint: "Not running. Start it in infra\\neo4j: docker compose up -d" }
   ];
+  return links.map((l): PlatformLink => (can[l.name.toLowerCase() as keyof typeof can] ? { ...l, launchUrl: `/api/launch/${l.name.toLowerCase()}` } : l));
 }
 
 export const getServerSideProps: GetServerSideProps<Props> = async (context) => {

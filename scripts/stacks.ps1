@@ -3,6 +3,7 @@
   pointing at the lab container.
 
     .\scripts\stacks.ps1 status
+    .\scripts\stacks.ps1 lab            # (re)start SSH and syslog inside the lab container, so login attempts against it reach Wazuh
     .\scripts\stacks.ps1 use-all         # run EVERYTHING at once (OpenCTI is capped so all four fit in 11 GB; see infra\opencti\compose.primesec.yaml)
     .\scripts\stacks.ps1 use-greenbone    # stop OpenCTI, start Greenbone, give the lab container a FIXED address, refresh the bridge allow-list
     .\scripts\stacks.ps1 use-opencti      # stop Greenbone, start OpenCTI
@@ -10,7 +11,7 @@
   Stopping keeps all data. Wazuh and Neo4j are not touched. Nothing here starts a scan.
   After use-greenbone, a SOC_Admin must still approve a PrimeSEC scope for the lab address before anything can be scanned.
 #>
-param([Parameter(Mandatory = $true)][ValidateSet("status", "use-all", "use-greenbone", "use-opencti")][string]$Action)
+param([Parameter(Mandatory = $true)][ValidateSet("status", "lab", "use-all", "use-greenbone", "use-opencti")][string]$Action)
 
 # Docker writes progress to stderr; in Windows PowerShell 5.1 that would become a terminating error under "Stop", so errors are judged by exit code instead.
 $ErrorActionPreference = "Continue"
@@ -25,6 +26,19 @@ $gbCompose = @("compose", "-f", "compose.yaml", "-f", "compose.bridge.yaml")
 
 function Running($pattern) { @(docker ps --format "{{.Names}}" | Where-Object { $_ -match $pattern }).Count }
 
+# The lab container's startup command runs only the Wazuh agent, so after any restart its SSH server and syslog service are down and login attempts
+# against it are either refused or never logged. This starts what is missing (rsyslog supplies the line format Wazuh's SSH rules read).
+function Lab-Services($mode) {
+    $script = Join-Path $PSScriptRoot "lab-services.sh"
+    (Get-Content -Raw $script) -replace "`r`n", "`n" | docker exec -i $labContainer sh -s -- $mode 2>&1
+}
+
+function Start-LabServices {
+    if (-not (Running "^$labContainer$")) { "Lab container is not running; nothing to start."; return }
+    $up = Lab-Services "start"
+    if ("$up" -match "yes") { "Lab container: SSH and syslog running." } else { "WARNING: SSH or syslog is not running in the lab container; Wazuh will not see login attempts." }
+}
+
 function Show-Status {
     "Wazuh      : {0} containers running" -f (Running "wazuh")
     "OpenCTI    : {0} containers running" -f (Running "primesec-opencti")
@@ -32,10 +46,16 @@ function Show-Status {
     "Neo4j      : {0} containers running" -f (Running "neo4j")
     $mem = docker info --format "{{.MemTotal}}"
     "Docker memory: {0:N1} GB" -f ([double]$mem / 1GB)
+    if (Running "^$labContainer$") {
+        $up = Lab-Services "check"
+        "Lab host   : {0}" -f $(if ("$up" -match "yes") { "SSH and syslog running" } else { "SSH or syslog DOWN (run: .\scripts\stacks.ps1 lab)" })
+    }
 }
 
 switch ($Action) {
     "status" { Show-Status }
+
+    "lab" { Start-LabServices }
 
     "use-opencti" {
         Push-Location $gb;   try { $null = docker @gbCompose stop 2>&1 } finally { Pop-Location }
@@ -61,7 +81,10 @@ switch ($Action) {
 
             # Give the lab container a fixed address on Greenbone's network.
             function Attach-Lab {
-                $cur = docker inspect $labContainer --format "{{with index .NetworkSettings.Networks `"$gbNetwork`"}}{{.IPAddress}}{{end}}" 2>$null
+                # No quotes inside the template: Windows PowerShell 5.1 strips them when calling docker, which used to make this lookup fail
+                # and send every run down the (slow, disruptive) recreate path below.
+                $all = "$(docker inspect $labContainer --format '{{range $k,$v := .NetworkSettings.Networks}}{{$k}}={{$v.IPAddress}};{{end}}' 2>$null)"
+                $cur = if ($all -match "(?:^|;)$([regex]::Escape($gbNetwork))=([0-9.]*);") { $Matches[1] } else { "" }
                 if ($cur -eq $labIp) { return "already" }
                 if ($cur) { $null = docker network disconnect $gbNetwork $labContainer 2>&1 }
                 $null = docker network connect --ip $labIp $gbNetwork $labContainer 2>&1
@@ -94,11 +117,18 @@ switch ($Action) {
                 $null = docker @gbCompose up -d primesec-bridge 2>&1
                 "Bridge allow-list set to $labIp/32."
             } else { "Bridge allow-list already $labIp/32." }
+
+            # The page behind the dashboard's one-click Greenbone sign-in has to live in Greenbone's own web volume (its web root is mounted
+            # read-only, so it cannot be a compose mount). Copying it is idempotent and survives a Greenbone image upgrade that clears the volume.
+            $handoff = (Resolve-Path (Join-Path $PSScriptRoot "..\bridge\primesec-handoff.html")).Path
+            $null = docker run --rm -v greenbone-community-edition_gsa_data_vol:/v -v "${handoff}:/src/h.html:ro" alpine sh -c "cp /src/h.html /v/primesec-handoff.html && chmod 644 /v/primesec-handoff.html" 2>&1
+            if ($LASTEXITCODE -eq 0) { "One-click sign-in page installed in Greenbone." } else { "WARNING: could not install the one-click sign-in page; Greenbone will ask for its login." }
         } finally { Pop-Location }
         if ($Action -eq "use-all") {
             Push-Location $octi; try { $null = docker compose -f compose.primesec.yaml up -d 2>&1 } finally { Pop-Location }
             "Greenbone and OpenCTI are both running."
         } else { "OpenCTI stopped, Greenbone running." }
+        Start-LabServices
         "A SOC_Admin must approve a PrimeSEC scope for $labIp before it can be scanned."
         Show-Status
     }

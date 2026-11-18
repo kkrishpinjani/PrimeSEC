@@ -11,6 +11,7 @@ Only scan systems you are explicitly authorised to assess.
 import datetime
 import hmac
 import ipaddress
+import configparser
 import json
 import os
 import re
@@ -18,6 +19,9 @@ import shlex
 import subprocess
 import sys
 import traceback
+import time
+import urllib.error
+import urllib.request
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from xml.etree import ElementTree as ET
@@ -34,6 +38,12 @@ GMP_USER = os.getenv("GREENBONE_GMP_USERNAME", "")
 GMP_PASSWORD = os.getenv("GREENBONE_GMP_PASSWORD", "")
 # Preferred over GMP_PASSWORD: a gvm-tools config file (mode 0600) keeps the password out of `ps`.
 GVM_CONFIG = os.getenv("GVM_CLI_CONFIG", "")
+# Where the Greenbone web service (gsad) listens ON THE DOCKER NETWORK, plain HTTP. Setting it enables POST /v1/session, which lets
+# PrimeSEC sign an administrator into the Greenbone web interface without typing the password. Unset = disabled.
+GSAD_URL = os.getenv("GREENBONE_GSAD_URL", "").rstrip("/")
+# gsad ties a session to the address it was created from, and honours X-Real-IP. A browser reaches gsad through nginx, which reports the
+# address the browser connected from (on Docker Desktop: the network gateway), so the session must be created as that address to be usable.
+WEB_CLIENT_ADDRESS = os.getenv("GREENBONE_WEB_CLIENT_ADDRESS", "").strip()
 GVM_CLI = os.getenv("GVM_CLI_PATH", "gvm-cli")
 SCAN_CONFIG = os.getenv("GREENBONE_SCAN_CONFIG_ID", "daba56c8-73ec-11df-a475-002264764cea")
 PORT_LIST = os.getenv("GREENBONE_PORT_LIST_ID", "33d0cd82-57c6-11e1-8ed1-406186ea4fc5")
@@ -353,6 +363,50 @@ def create_assessment(data):
     }
 
 
+def gmp_credentials():
+    if GMP_USER and GMP_PASSWORD:
+        return GMP_USER, GMP_PASSWORD
+    if GVM_CONFIG:
+        cfg = configparser.ConfigParser()
+        cfg.read(GVM_CONFIG, encoding="utf8")
+        if cfg.has_section("gmp") and cfg.get("gmp", "username", fallback="") and cfg.get("gmp", "password", fallback=""):
+            return cfg.get("gmp", "username"), cfg.get("gmp", "password")
+    raise BridgeError("No Greenbone login is configured on the bridge.")
+
+
+def web_session():
+    """Logs in to gsad the way its own login page does and returns what the web app keeps in the browser. The password never leaves
+    this process; the caller gets a short-lived session token (Greenbone ends it after about 15 minutes without activity)."""
+    if not GSAD_URL:
+        raise BridgeError("Web sign-in is not enabled on this bridge (GREENBONE_GSAD_URL is not set).")
+    user, password = gmp_credentials()
+    boundary = uuid.uuid4().hex
+    CRLF = '\r\n'
+    parts = [f'--{boundary}{CRLF}Content-Disposition: form-data; name="{k}"{CRLF}{CRLF}{v}{CRLF}' for k, v in (("login", user), ("password", password))]
+    body = ''.join(parts) + f'--{boundary}--{CRLF}'
+    headers = {"Content-Type": f"multipart/form-data; boundary={boundary}"}
+    if WEB_CLIENT_ADDRESS:
+        headers["X-Real-IP"] = WEB_CLIENT_ADDRESS
+    req = urllib.request.Request(f"{GSAD_URL}/login", body.encode(), headers)
+    try:
+        with urllib.request.urlopen(req, timeout=20) as r:
+            xml, cookies = r.read(), r.headers.get_all("Set-Cookie") or []
+    except urllib.error.HTTPError as e:
+        raise BridgeError("Greenbone refused the stored login." if e.code in (401, 403) else f"Greenbone answered {e.code}.")
+    except (urllib.error.URLError, OSError):
+        raise BridgeError("Could not reach the Greenbone web service.")
+    try:
+        root = ET.fromstring(xml)
+    except ET.ParseError:
+        raise BridgeError("Greenbone answered with something unexpected.")
+    token = text(root, "token")
+    if not token:
+        raise BridgeError("Greenbone did not return a session.")
+    seconds = int(text(root, "duration", "900") or 900)
+    sid = next((c.split(";")[0].split("=", 1)[1] for c in cookies if c.startswith("GSAD_SID=")), "")
+    return {"token": token, "username": user, "sid": sid, "expiresAt": int((time.time() + seconds) * 1000)}
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "PrimeSEC-Greenbone-Bridge/1.1"
 
@@ -402,7 +456,16 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         if not self.authorized():
             return self.send_json(401, {"error": "Authentication required"})
-        if self.path.split("?", 1)[0] != "/v1/assessments":
+        route = self.path.split("?", 1)[0]
+        if route == "/v1/session":
+            try:
+                return self.send_json(200, web_session())
+            except BridgeError as e:
+                return self.send_json(502, {"error": str(e)})
+            except Exception:
+                log_unexpected(f"{self.command} {self.path}")
+                return self.send_json(500, {"error": "Unexpected bridge error. Check bridge logs."})
+        if route != "/v1/assessments":
             return self.send_json(404, {"error": "Not found"})
         try:
             length = int(self.headers.get("Content-Length", "0"))
