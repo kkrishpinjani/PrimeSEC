@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Insights from "./Insights";
 import { useCallback, useEffect, useState } from "react";
 import { LogoMark } from "./Logo";
 import { fullSignOut } from "../lib/signOutClient";
@@ -66,6 +67,7 @@ export default function ThreatIntelExplorer({ user, roles }: { user: { name?: st
       </div>
       <div className="vapt-body">
         <p className="vapt-warning">Read-only view of your OpenCTI, through a read-only account. Intelligence is a lead, not a verdict: a match means something is worth checking, and no match does not mean something is safe. {page?.markingPolicy ? <>Only objects marked <b>{page.markingPolicy.join(", ").toUpperCase()}</b> are shown in full; others appear as an id only.</> : null}</p>
+        <Insights topic="intel" title="Threat intelligence insights" />
         {error && <div className="pv-list pv-error" role="alert">{error}</div>}
         <div className="pv-list">
           <div className="fd-actions">

@@ -1,5 +1,6 @@
 import { promises as fs } from "fs";
 import path from "path";
+import { dataPath } from "./dataDir.ts";
 
 /**
  * Local JSON Lines audit trail (development MVP). Not tamper-proof: replace with a durable,
@@ -78,7 +79,7 @@ export type AuditAction = AuditEvent["action"];
 type Unwrap<T> = T extends unknown ? Omit<T, "eventId" | "timestamp"> : never;
 export type AuditInput = Unwrap<AuditEvent>;
 
-const auditPath = () => path.join(process.cwd(), "data", "audit-events.jsonl");
+const auditPath = () => dataPath("audit-events.jsonl");
 
 export async function writeAuditEvent(event: AuditInput): Promise<AuditEvent> {
   const record = {

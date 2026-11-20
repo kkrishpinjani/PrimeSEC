@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Insights from "./Insights";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { LogoMark } from "./Logo";
 import { fullSignOut } from "../lib/signOutClient";
@@ -133,6 +134,7 @@ export default function RiskWorkspace({ user, roles }: { user: { name?: string |
 
       <div className="vapt-body">
         <p className="vapt-warning">The risk score is a <b>triage aid, not a probability of exploitation</b> and not a replacement for CVSS. Missing information is shown as <b>unknown</b> (never as zero) and widens the score&apos;s range. Report comparison never closes or changes a finding: a person verifies the evidence and decides.</p>
+        <Insights topic="risk" />
         {error && <div className="pv-list pv-error" role="alert">{error}</div>}
         {notice && <div className="pv-list vapt-ok" role="status">{notice}</div>}
 

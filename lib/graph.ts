@@ -189,6 +189,21 @@ export class GraphClient {
     return { links: n(0), assets: n(1), vulnerabilities: n(2) };
   }
 
+
+  /** The whole graph of this namespace (capped), for the visual explorer. Read-only. */
+  async overview(maxNodes = 400, maxRels = 1500): Promise<{ nodes: { type: string; id: string; name: string; props: Record<string, unknown> }[]; relationships: { source: string; target: string; type: string }[] }> {
+    const ns = this.cfg?.namespace ?? "primesec";
+    const [nodeRows, relRows] = await this.run([
+      { statement: "MATCH (n {tenant_id:$tenant}) RETURN labels(n)[0] AS type, n.external_id AS id, coalesce(n.name, n.title, n.external_id) AS name, properties(n) AS props LIMIT $limit", parameters: { tenant: ns, limit: Math.max(1, Math.min(Math.floor(maxNodes) || 400, 1000)) } },
+      { statement: "MATCH (a {tenant_id:$tenant})-[r]->(b {tenant_id:$tenant}) RETURN labels(a)[0] AS st, a.external_id AS sid, type(r) AS rel, labels(b)[0] AS tt, b.external_id AS tid LIMIT $limit", parameters: { tenant: ns, limit: Math.max(1, Math.min(Math.floor(maxRels) || 1500, 3000)) } }
+    ]);
+    const keep = ["riskLevel", "riskScore", "severity", "cvss", "level", "environment", "criticality", "internetFacing", "assetType", "ip", "cve", "description", "agent", "timestamp"];
+    return {
+      nodes: (nodeRows ?? []).map(([type, id, name, props]) => ({ type: String(type), id: String(id), name: String(name ?? id), props: Object.fromEntries(Object.entries((props as Record<string, unknown>) ?? {}).filter(([k]) => keep.includes(k))) })),
+      relationships: (relRows ?? []).map(([st, sid, rel, tt, tid]) => ({ source: `${st}/${sid}`, target: `${tt}/${tid}`, type: String(rel) }))
+    };
+  }
+
   async attackPaths(assetId: string, limit = 25): Promise<{ nodes: { type: string; id: string; name: string }[]; relationships: string[] }[]> {
     if (typeof assetId !== "string" || !assetId || assetId.length > MAX_ID) throw new GraphError("An asset id is required.", "INVALID");
     const ns = this.cfg?.namespace ?? "primesec";
@@ -200,11 +215,11 @@ export class GraphClient {
     return (rows ?? []).map(([nodes, relationships]) => ({ nodes: nodes as never, relationships: relationships as never }));
   }
 
-  async assetExposure(limit = 100): Promise<{ assetId: string; name: string; vulnerabilityCount: number; vulnerabilities: { id: string; severity: string | null; cve: string | null }[] }[]> {
+  async assetExposure(limit = 100): Promise<{ assetId: string; name: string; vulnerabilityCount: number; vulnerabilities: { id: string; severity: string | null; cve: string | null; title: string | null }[] }[]> {
     const ns = this.cfg?.namespace ?? "primesec";
     const [rows] = await this.run([{
       statement: "MATCH (a:Asset {tenant_id:$tenant}) OPTIONAL MATCH (a)-[:HAS_VULNERABILITY]->(v:Vulnerability {tenant_id:$tenant}) WITH a, collect(DISTINCT v) AS vulns " +
-        "RETURN a.external_id AS asset_id, coalesce(a.name, a.external_id) AS name, size(vulns) AS vulnerability_count, [v IN vulns | {id:v.external_id, severity:v.severity, cve:v.cve}] AS vulnerabilities ORDER BY vulnerability_count DESC LIMIT $limit",
+        "RETURN a.external_id AS asset_id, coalesce(a.name, a.external_id) AS name, size(vulns) AS vulnerability_count, [v IN vulns | {id:v.external_id, severity:v.severity, cve:v.cve, title:v.title}] AS vulnerabilities ORDER BY vulnerability_count DESC LIMIT $limit",
       parameters: { tenant: ns, limit: Math.max(1, Math.min(Math.floor(limit) || 100, 500)) }
     }]);
     return (rows ?? []).map(([assetId, name, count, vulns]) => ({ assetId: String(assetId), name: String(name), vulnerabilityCount: Number(count), vulnerabilities: vulns as never }));

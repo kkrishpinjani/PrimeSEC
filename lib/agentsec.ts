@@ -15,6 +15,7 @@
 import { promises as fs } from "fs";
 import path from "path";
 import { randomBytes } from "crypto";
+import { dataPath } from "./dataDir.ts";
 
 export const FRAMEWORKS = ["LangChain", "CrewAI", "AutoGen", "Semantic Kernel", "n8n", "OpenClaw", "MCP client", "Custom", "Other"] as const;
 export const ENVIRONMENTS = ["development", "test", "staging", "production"] as const;
@@ -91,7 +92,7 @@ export function defaultState(): AgentState {
 
 /* ---------------------------------- storage ---------------------------------- */
 
-const storePath = () => path.join(process.cwd(), "data", "agentsec-state.json");
+const storePath = () => dataPath("agentsec-state.json");
 let chain: Promise<unknown> = Promise.resolve();
 
 export async function readState(): Promise<AgentState> {

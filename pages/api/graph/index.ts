@@ -18,6 +18,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     const view = one(req.query.view);
     if (view === "exposure") return res.status(200).json({ configured: true, reachable: true, items: await graph.assetExposure(Number(one(req.query.limit)) || undefined) });
+    if (view === "overview") return res.status(200).json({ configured: true, reachable: true, ...(await graph.overview()) });
     if (view === "paths") return res.status(200).json({ configured: true, reachable: true, paths: await graph.attackPaths(String(one(req.query.asset) ?? ""), Number(one(req.query.limit)) || undefined) });
     return res.status(200).json({ configured: true, reachable: await graph.health(), message: "Neo4j answered." });
   } catch (error) {

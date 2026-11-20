@@ -8,6 +8,7 @@
 import { createHash } from "crypto";
 import { promises as fs } from "fs";
 import path from "path";
+import { dataPath } from "./dataDir.ts";
 
 export const STATUSES = ["Open", "In Progress", "Resolved", "Retest Required", "Closed"] as const;
 /** What the analyst knows about exploitation of this vulnerability (for example from CISA KEV or a vendor advisory). */
@@ -59,7 +60,7 @@ export type Finding = {
 
 export type SyncResult = { findings: Finding[]; imported: number; updated: number; missing: number; truncated: boolean; retrievedAt: string };
 
-const storePath = () => path.join(process.cwd(), "data", "vapt-findings.json");
+const storePath = () => dataPath("vapt-findings.json");
 export const MAX_NOTES = 2000;
 export const MAX_OWNER = 120;
 export const MIN_CLOSE_JUSTIFICATION = 10;

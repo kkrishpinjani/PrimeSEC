@@ -1,4 +1,5 @@
 import dynamic from "next/dynamic";
+import Insights from "./Insights";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
@@ -275,7 +276,7 @@ function buildNote(data: DashboardData): string {
   }
   const sample = (Object.keys(data.sources) as SectionId[]).filter((k) => data.sources[k] === "sample").map((k) => SECTION_LABEL[k]);
   if (sample.length) parts.push(`Sample data shown for: ${sample.join(", ")}.`);
-  if (data.demo) parts.unshift("Connected to the local demo integrations: every record is fake (marked \"(demo)\"). Point .env at real Wazuh/OpenCTI to see real data.");
+  if (data.demo) parts.unshift("Demo data: connected to the local demo integrations, a synthetic enterprise (no real telemetry, nothing is scanned). Point .env at real Wazuh/OpenCTI to see real data.");
   parts.push(...data.notes);
   return parts.join(" ");
 }
@@ -392,8 +393,8 @@ export default function SocDashboard({ data, user, roles, platforms, onSignOut }
                   <StatRow items={data.overview.stats} />
                 </>
               )}
-              {tab === "intel" && <><IntelView data={data.intel} /><StatRow items={data.intel.stats} /></>}
-              {tab === "vapt" && <><VaptView items={data.vulns.items} /><StatRow items={data.vulns.stats} /></>}
+              {tab === "intel" && <><IntelView data={data.intel} /><Insights topic="intel" title="Intelligence at a glance" limit={6} /><StatRow items={data.intel.stats} /></>}
+              {tab === "vapt" && <><VaptView items={data.vulns.items} /><Insights topic="vulns" title="Exposure at a glance" limit={5} /><StatRow items={data.vulns.stats} /></>}
               {tab === "invest" && (
                 <>
                   <InvestView alerts={data.investigations.alerts} canInvestigate={canInvestigate} busyId={busyId} onInvestigate={investigate} />

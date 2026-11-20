@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Insights from "./Insights";
 import { useCallback, useEffect, useState } from "react";
 import { LogoMark } from "./Logo";
 import { fullSignOut } from "../lib/signOutClient";
@@ -103,6 +104,7 @@ export default function CasesWorkspace({ user, roles }: { user: { name?: string 
 
       <div className="vapt-body">
         <p className="vapt-warning">A case is the written record of one investigation: an owner, a status, the evidence and a timeline of who did what. It <b>records work and suggests next steps</b>; it never changes a system. Any containment action is only a <b>proposal</b> that a second administrator must approve in Governed response, and it does nothing unless execution has been deliberately enabled there. The plan is a rule-based checklist, not an AI verdict.</p>
+        <Insights topic="cases" />
         {error && <div className="pv-list pv-error" role="alert">{error}</div>}
         {notice && <div className="pv-list vapt-ok" role="status">{notice}</div>}
 

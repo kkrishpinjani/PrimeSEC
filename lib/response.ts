@@ -10,6 +10,7 @@
  */
 import { promises as fs } from "fs";
 import path from "path";
+import { dataPath } from "./dataDir.ts";
 
 export const PROPOSAL_STATUSES = ["proposed", "approved", "rejected", "executing", "executed", "execution_failed", "cancelled"] as const;
 export type ProposalStatus = (typeof PROPOSAL_STATUSES)[number];
@@ -101,7 +102,7 @@ export function registerAdapter(adapter: ResponseAdapter): void { registry.adapt
 
 /* ------------------------------ storage ------------------------------ */
 
-const storePath = () => path.join(process.cwd(), "data", "response.json");
+const storePath = () => dataPath("response.json");
 const EMPTY = (): Store => ({ proposals: [], executions: [] });
 
 export async function readResponse(): Promise<Store> {

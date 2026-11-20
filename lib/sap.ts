@@ -11,6 +11,7 @@ import path from "path";
 import { randomBytes } from "crypto";
 import { instrumentedCall } from "./telemetry.ts";
 import { isOffensive, ollamaBaseUrl } from "./cyberreasoner.ts";
+import { dataPath } from "./dataDir.ts";
 
 export const SAP_HELP_SNC = "https://help.sap.com/docs/SAP_NETWEAVER_700/10977ac76c531014a966b3f130d4f853/658d09ab5c7e46028f633bb01a09b380.html";
 export const SAP_HELP_GATEWAY = "https://help.sap.com/saphelp_em92/helpdata/en/48/b2096e7895307be10000000a42189b/content.htm";
@@ -291,7 +292,7 @@ export type SapAssessment = {
   ragContext: RagItem[]; llmExplanation: string | null; llmNote: string | null; limitations: string[];
   inputs: { saprouttabLines: number; gatewayProfileLines: number; reginfoLines: number; secinfoLines: number };
 };
-const storePath = () => path.join(process.cwd(), "data", "sap-assessments.json");
+const storePath = () => dataPath("sap-assessments.json");
 const MAX_KEPT = 100;
 let chain: Promise<unknown> = Promise.resolve();
 

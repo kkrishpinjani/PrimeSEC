@@ -16,6 +16,8 @@ const securityHeaders = [
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // The rich demo (scripts/dev-demo.ps1) builds into its own folder so it can run beside the normal dev server.
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   reactStrictMode: true,
   poweredByHeader: false,
   async headers() {

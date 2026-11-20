@@ -8,6 +8,7 @@
  */
 import { promises as fs } from "fs";
 import path from "path";
+import { dataPath } from "./dataDir.ts";
 
 export const CASE_STATUSES = ["new", "triaged", "investigating", "contained", "resolved", "closed"] as const;
 export type CaseStatus = (typeof CASE_STATUSES)[number];
@@ -79,7 +80,7 @@ export class CaseError extends Error {
 
 /* ------------------------------ storage ------------------------------ */
 
-const storePath = () => path.join(process.cwd(), "data", "cases.json");
+const storePath = () => dataPath("cases.json");
 export async function readCases(): Promise<Case[]> {
   try {
     const v = JSON.parse(await fs.readFile(storePath(), "utf8"));

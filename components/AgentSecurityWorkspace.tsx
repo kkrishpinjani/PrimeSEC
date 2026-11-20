@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Insights from "./Insights";
 import { useCallback, useEffect, useState } from "react";
 import { LogoMark } from "./Logo";
 import { fullSignOut } from "../lib/signOutClient";
@@ -129,6 +130,7 @@ export default function AgentSecurityWorkspace({ user, roles }: { user: { name?:
 
       <div className="vapt-body">
         <p className="vapt-warning">This records which AI agents you know about and <b>decides</b> whether a proposed action should be allowed. It does not run, monitor or block any agent by itself: a decision only matters if the system that runs the agent asks first and obeys the answer. The inventory is entered by hand (seeded examples are marked); nothing is discovered automatically.</p>
+        {tab === "overview" && <Insights topic="agentsec" />}
         {error && <div className="pv-list pv-error" role="alert">{error}</div>}
         {notice && <div className="pv-list vapt-ok" role="status">{notice}</div>}
 

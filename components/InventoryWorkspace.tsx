@@ -1,6 +1,8 @@
 import Link from "next/link";
+import Insights from "./Insights";
 import { useCallback, useEffect, useState } from "react";
 import { LogoMark } from "./Logo";
+import GraphExplorer from "./GraphExplorer";
 import GraphDiagram from "./GraphDiagram";
 import { fullSignOut } from "../lib/signOutClient";
 import type { AssetRow, DetailVuln, InventoryAsset, Observation, StaleSource } from "../lib/inventory";
@@ -9,7 +11,7 @@ import type { IntelObject, SyncRun, Watermark } from "../lib/sync";
 type Tab = "assets" | "sync" | "intel" | "graph" | "dupes";
 type Candidate = { a: AssetRow; b: AssetRow; reasons: string[]; strength: "strong" | "medium" | "weak" };
 type GraphState = { configured: boolean; reachable: boolean; message?: string };
-type Exposure = { assetId: string; name: string; vulnerabilityCount: number; vulnerabilities: { id: string; severity: string | null; cve: string | null }[] };
+type Exposure = { assetId: string; name: string; vulnerabilityCount: number; vulnerabilities: { id: string; severity: string | null; cve: string | null; title?: string | null }[] };
 type GraphPath = { nodes: { type: string; id: string; name: string }[]; relationships: string[] };
 type Summary = { staleAssets?: number; totalAssets: number; byRisk: Record<string, number>; internetFacing: number; highCriticality: number; criticalityUnknown: number; bySource: Record<string, number> };
 type Detail = InventoryAsset & { openVulnerabilities: number; staleSources: StaleSource[]; vulnerabilities: DetailVuln[]; observations: Observation[] };
@@ -162,6 +164,8 @@ export default function InventoryWorkspace({ user, roles }: { user: { name?: str
 
       <div className="vapt-body">
         <p className="vapt-warning">One record per asset, built from what Wazuh, Greenbone and other sources report. Records merge only on <b>durable identifiers</b> (agent id, cloud instance id, CMDB id), never on IP or hostname, so the same machine seen by two tools can appear twice until an analyst reconciles it. The exposure score is a documented heuristic for ordering work, not a probability. Nothing here scans or changes a host.</p>
+        {tab === "assets" && <Insights topic="inventory" />}
+        {tab === "sync" && <Insights topic="sync" title="Synchronization insights" />}
         {error && <div className="pv-list pv-error" role="alert">{error}</div>}
         {notice && <div className="pv-list vapt-ok" role="status">{notice}</div>}
 
@@ -279,10 +283,12 @@ export default function InventoryWorkspace({ user, roles }: { user: { name?: str
                   <button className="pv-btn" disabled={!isAdmin || busy !== ""} onClick={() => void graphWrite("schema")}>Create indexes</button>
                   <button className="pv-btn pv-btn-primary" disabled={!isAdmin || busy !== ""} onClick={() => void graphWrite("project")}>{busy === "graph-project" ? "Projecting…" : "Project inventory into graph"}</button>
                 </div>
+                <GraphExplorer />
+                <small>Assets ranked by open vulnerabilities. Choose Paths to see one asset&apos;s connections as a diagram.</small>
                 {exposure.length === 0 ? <p className="pv-empty">The graph has no assets yet. Project the inventory (SOC_Admin).</p> : exposure.map((x) => (
                   <div className="pv-row pv-row-graph" key={x.assetId}>
                     <strong>{x.name}</strong>
-                    <span>{x.vulnerabilityCount} open vulnerabilit{x.vulnerabilityCount === 1 ? "y" : "ies"}{x.vulnerabilities.length ? ` · ${x.vulnerabilities.slice(0, 3).map((v) => v.cve ?? v.id).join(", ")}` : ""}</span>
+                    <span>{x.vulnerabilityCount} open vulnerabilit{x.vulnerabilityCount === 1 ? "y" : "ies"}{x.vulnerabilities.length ? ` · ${x.vulnerabilities.slice(0, 3).map((v) => v.cve ?? v.title ?? v.id).join(", ")}` : ""}</span>
                     <button className="pv-btn" disabled={busy !== ""} onClick={() => void showPaths(x.assetId)}>Paths</button>
                   </div>
                 ))}

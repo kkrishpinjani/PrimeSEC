@@ -10,6 +10,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import type { RawFinding } from "./findings";
 import { instrumentedCall } from "./telemetry.ts";
+import { dataPath } from "./dataDir.ts";
 
 export type VaptScope = {
   id: string;
@@ -41,7 +42,7 @@ export const MAX_SCOPE_DAYS = 90;
 export const MAX_TARGETS_PER_SCOPE = 10;
 export const MIN_REFERENCE_LENGTH = 8;
 
-const scopesPath = () => path.join(process.cwd(), "data", "vapt-scopes.json");
+const scopesPath = () => dataPath("vapt-scopes.json");
 
 /* ------------------------------ IPv4 / CIDR rules ------------------------------ */
 

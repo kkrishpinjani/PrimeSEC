@@ -13,6 +13,7 @@
 import { promises as fs } from "fs";
 import path from "path";
 import { normalizeFinding, type RawFinding } from "./findings.ts";
+import { dataPath } from "./dataDir.ts";
 
 export type SnapshotFinding = { id: string; host: string; port: string; oid: string; name: string; cves: string[]; severityScore: number; severity: string };
 export type ReportSnapshot = {
@@ -52,7 +53,7 @@ export type Comparison = {
 };
 
 const MAX_SNAPSHOTS = 200;
-const storePath = () => path.join(process.cwd(), "data", "vapt-report-snapshots.json");
+const storePath = () => dataPath("vapt-report-snapshots.json");
 const lc = (v: string) => v.trim().toLowerCase();
 
 let chain: Promise<unknown> = Promise.resolve();

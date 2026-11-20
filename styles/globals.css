@@ -516,3 +516,46 @@ footer { margin-top: 36px; font-size: 0.74rem; color: rgba(255,255,255,0.3); dis
 .gd-legend i { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 5px; }
 .gd-text { margin-top: 8px; font-size: 0.78rem; color: var(--text-muted); }
 .gd-text summary { cursor: pointer; }
+
+/* Graph explorer */
+.gx-wrap { display: grid; gap: 10px; }
+.gx-filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.gx-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.14); background: rgba(0,0,0,0.3); color: #ecfdfa; font-size: 0.74rem; cursor: pointer; }
+.gx-chip i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+.gx-chip b { color: var(--text-muted); font-weight: 500; }
+.gx-chip.off { opacity: 0.4; }
+.gx-hint { font-size: 0.7rem; color: var(--text-muted); margin-left: auto; }
+.gx-stage { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 10px; }
+.gx-svg { width: 100%; height: auto; aspect-ratio: 1100 / 680; background: radial-gradient(circle at 50% 45%, rgba(45,212,191,0.07), rgba(0,0,0,0.35)); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; touch-action: none; cursor: grab; }
+.gx-label { font-size: 9.5px; fill: #ecfdfa; pointer-events: none; paint-order: stroke; stroke: rgba(0,0,0,0.7); stroke-width: 3px; }
+.gx-panel { border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 12px; display: grid; gap: 8px; align-content: start; font-size: 0.78rem; max-height: 680px; overflow: auto; }
+.gx-panel dl { margin: 0; display: grid; gap: 3px; }
+.gx-panel dl div { display: flex; justify-content: space-between; gap: 8px; }
+.gx-panel dt { color: var(--text-muted); }
+.gx-panel dd { margin: 0; text-align: right; }
+.gx-panel ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; }
+.gx-panel li button { background: none; border: 0; color: #5eead4; cursor: pointer; padding: 0; text-align: left; }
+@media (max-width: 900px) { .gx-stage { grid-template-columns: 1fr; } }
+
+/* Insights charts */
+.ins-wrap { display: grid; gap: 8px; margin: 4px 0 8px; }
+.ins-head { color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.68rem; }
+.ins-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 10px; }
+.ins-card { border: 1px solid rgba(255,255,255,0.09); background: rgba(255,255,255,0.025); border-radius: 12px; padding: 12px; display: grid; gap: 8px; align-content: start; min-width: 0; }
+.ins-card > small { color: var(--text-muted); font-size: 0.72rem; }
+.ins-donut { display: grid; grid-template-columns: 112px 1fr; gap: 12px; align-items: center; }
+.ins-donut svg { width: 112px; height: 112px; }
+.ins-donut ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; font-size: 0.74rem; min-width: 0; }
+.ins-donut li { display: grid; grid-template-columns: 10px 1fr auto; gap: 6px; align-items: center; }
+.ins-donut li i { width: 8px; height: 8px; border-radius: 50%; }
+.ins-donut li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ins-total { font-size: 20px; font-weight: 700; fill: #ecfdfa; }
+.ins-sub, .ins-axis { font-size: 8px; fill: #7fa39f; }
+.ins-val { font-size: 8px; fill: #cfe7e3; }
+.ins-bars { display: grid; gap: 6px; }
+.ins-bars > div { display: grid; grid-template-columns: minmax(80px, 38%) 1fr auto; gap: 8px; align-items: center; font-size: 0.74rem; }
+.ins-bars span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ins-bars em { height: 8px; background: rgba(255,255,255,0.07); border-radius: 99px; overflow: hidden; display: block; }
+.ins-bars em i { display: block; height: 100%; border-radius: 99px; }
+.ins-cols { width: 100%; height: auto; }
+.ins-note { font-size: 0.68rem; color: var(--text-muted); font-style: normal; }

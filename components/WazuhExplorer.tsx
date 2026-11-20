@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Insights from "./Insights";
 import { useCallback, useEffect, useState } from "react";
 import { LogoMark } from "./Logo";
 import { fullSignOut } from "../lib/signOutClient";
@@ -75,6 +76,10 @@ export default function WazuhExplorer({ user, roles }: { user: { name?: string |
       <div className="vapt-body">
         <p className="vapt-warning">Read-only view of your Wazuh. Every request is a fixed, validated query; nothing here changes Wazuh, restarts a service or triggers active response. {busy && <b>Loading…</b>}</p>
         {error && <div className="pv-list pv-error" role="alert">{error}</div>}
+        {(tab === "overview" || tab === "groups") && <Insights topic="wazuh-agents" title="Fleet insights" />}
+        {tab === "alerts" && <Insights topic="alerts" title="Alert insights (24 h)" />}
+        {tab === "rules" && <Insights topic="wazuh-rules" title="Ruleset insights" />}
+        {tab === "mitre" && <Insights topic="wazuh-mitre" title="ATT&CK coverage" />}
 
         {tab === "overview" && overview && (
           <div className="pv-list">

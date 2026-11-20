@@ -1,4 +1,5 @@
 import ScanPlatformPanel from "./ScanPlatformPanel";
+import Insights from "./Insights";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { LogoMark } from "./Logo";
@@ -132,6 +133,7 @@ export default function VaptWorkspace({ user, roles }: { user: { name?: string |
 
       <div className="vapt-body">
         <p className="vapt-warning"><b>Only scan systems you are explicitly authorized to assess.</b> A scan can start only inside a scope a SOC_Admin approved with a written authorization reference and an expiry. Every approval, revocation, launch and refusal is audited.</p>
+        <Insights topic="vapt" />
         {data?.scopesError && <div className="pv-list pv-error" role="alert">{data.scopesError}</div>}
         {error && <div className="pv-list pv-error" role="alert">{error}</div>}
         {notice && <div className="pv-list vapt-ok" role="status">{notice}</div>}

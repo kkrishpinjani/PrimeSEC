@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Insights from "./Insights";
 import { useCallback, useEffect, useState } from "react";
 import { LogoMark } from "./Logo";
 import { fullSignOut } from "../lib/signOutClient";
@@ -79,6 +80,7 @@ export default function ResponseWorkspace({ user, roles }: { user: { name?: stri
         )}
         {error && <div className="pv-list pv-error" role="alert">{error}</div>}
         {notice && <div className="pv-list vapt-ok" role="status">{notice}</div>}
+        <Insights topic="response" />
 
         <div className="pv-list">
           <small>Propose an action {canPropose ? "" : "(SOC_Analyst or SOC_Admin only)"}. A proposal acts on nothing; it asks for review.</small>

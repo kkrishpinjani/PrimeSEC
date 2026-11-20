@@ -26,3 +26,5 @@ tsconfig.tsbuildinfo
 # local backup of .env
 .env.demo
 /infra/neo4j/
+/data-demo/
+.next-demo/

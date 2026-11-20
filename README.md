@@ -61,6 +61,29 @@ The demo settings live under the DEMO headings in `.env` and are marked with `DE
 
 To go real, replace the DEMO lines in `.env` with real URLs and read-only credentials, and set `DEMO_INTEGRATIONS=false`.
 
+### Rich demo for client presentations
+
+For a fuller picture than the small demo above, run the **rich demo**. It makes the whole product look lived-in without touching your real setup:
+
+```powershell
+.\scripts\dev-demo.ps1            # starts the synthetic platforms, seeds the demo data (first run only), starts the app on http://localhost:3011
+.\scripts\dev-demo.ps1 -Reseed    # rebuild the demo data from scratch
+```
+
+Sign in with the **Admin** / **Analyst** / **Read-only** demo buttons. The normal app on :3010 can keep running; the demo uses its own port, its own data folder (`data-demo/`), its own build folder (`.next-demo/`) and its own Neo4j namespace (`primesec-demo`). The seed script refuses to run against a folder called `data`.
+
+What the dataset contains. Everything is invented: a fictional company ("Meridian Group"), addresses from the documentation ranges, reserved domain names, random hashes, and the dashboard is labelled **Demo data**.
+
+| Area | Content |
+|---|---|
+| **Wazuh** (`scripts/demo/`) | 54 agents (DMZ web tier, app and database tiers, Active Directory, AWS/Azure/GCP, Kubernetes, VPN/jump hosts, workstations in four cities), a 3-node cluster, ~2,500 alerts per day that follow business hours, attack traffic from 40 cities (the globe), ~500 vulnerabilities, SCA, file-integrity and rootcheck data per agent, a ruleset with custom rules, MITRE ATT&CK techniques and groups |
+| **Incidents inside the alerts** | Phishing to credential theft to lateral movement, ransomware-like encryption, a web shell after SQL injection, Log4Shell attempts, VPN password spray and impossible travel, cloud root misuse, a container escape attempt, database exfiltration. The same IOCs exist in OpenCTI, so **Investigate** finds real matches |
+| **OpenCTI** | ~310 indicators, 56 reports, 28 threat actors, 36 malware families, ~70 vulnerabilities (CISA KEV flagged), observables, with TLP markings (AMBER/RED objects are hidden by the marking policy) |
+| **Greenbone** | 17 hosts, 4 weekly scan reports (some findings fixed since, some new), scan platform details, 9 tasks. Launching a scan only records a demo task |
+| **PrimeSEC records** | 147 findings with owners, statuses, retests and notes; approved and revoked scan scopes; an inventory of ~76 assets from Wazuh, Greenbone, AWS, Azure, GCP and a CMDB (with duplicates to merge and stale sources); 15 cases with evidence and timelines; governed-response proposals, approvals, executions, verification and rollback; an AI-agent registry with policies, gateway decisions and approvals; 4 SAP assessments; an audit trail; a ~220-node security graph |
+
+The synthetic platforms are `scripts/demo-integrations.js` (`npm run demo:integrations`) with data in `scripts/demo/`; the seeding is `scripts/seed-demo.mjs`. The seed uses the same library functions as the app, so nothing in the demo takes a shortcut the real product does not have. CVE ids are real public identifiers, but their descriptions and scores are approximate and not authoritative.
+
 ## Connecting real platforms
 
 All platform calls happen **server-side**; credentials stay in `.env` and are never sent to the browser. Every integration route needs a session and a PrimeSEC role (401/403 otherwise) and is `no-store`.

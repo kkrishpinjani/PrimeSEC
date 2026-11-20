@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Insights from "./Insights";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { LogoMark } from "./Logo";
 import { fullSignOut } from "../lib/signOutClient";
@@ -127,6 +128,7 @@ export default function FindingsWorkspace({ user, roles }: { user: { name?: stri
 
       <div className="vapt-body">
         <p className="vapt-warning">Scanner output is <b>evidence for analyst triage, not proof that an asset is compromised</b>. A retest launches a new authorized scan (same scope, audit and rate-limit rules as any scan); nothing is fixed or changed on the host. A finding can be closed only after a retest was requested, or by a SOC_Admin who writes a justification in the notes.</p>
+        <Insights topic="findings" />
         {error && <div className="pv-list pv-error" role="alert">{error}</div>}
         {notice && <div className="pv-list vapt-ok" role="status">{notice}</div>}
 

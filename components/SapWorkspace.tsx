@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Insights from "./Insights";
 import { useCallback, useEffect, useState } from "react";
 import { LogoMark } from "./Logo";
 import { fullSignOut } from "../lib/signOutClient";
@@ -127,6 +128,7 @@ export default function SapWorkspace({ user, roles }: { user: { name?: string | 
 
       <div className="vapt-body">
         <p className="vapt-warning">Paste the <b>configuration text</b> of an SAP router or gateway and PrimeSEC lists configuration risks. It works <b>offline</b>: it never connects to an SAP system, scans an address or tests a credential. A finding is a lead to verify against your exact SAP release, not proof that anything is exploitable, and an empty result does not mean the system is secure. Paste only configuration you are authorised to review.</p>
+        {tab !== "knowledge" && <Insights topic="sap" />}
         {error && <div className="pv-list pv-error" role="alert">{error}</div>}
         {notice && <div className="pv-list vapt-ok" role="status">{notice}</div>}
 

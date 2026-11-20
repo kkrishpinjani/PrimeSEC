@@ -217,7 +217,7 @@ async function getWazuhAlerts(): Promise<WazuhAlerts> {
         }
       },
       top_src: {
-        terms: { field: "data.srcip", size: 25 },
+        terms: { field: "data.srcip", size: 40 },
         aggs: {
           max_level: { max: { field: "rule.level" } },
           geo: { top_hits: { size: 1, _source: ["GeoLocation.location", "GeoLocation.country_name", "GeoLocation.city_name"] } }
@@ -277,7 +277,7 @@ async function getWazuhVulns(): Promise<WazuhVulns> {
   try {
     const index = process.env.WAZUH_VULN_INDEX_PATTERN || "wazuh-states-vulnerabilities-*";
     const body = await indexerSearch(index, {
-      size: 5,
+      size: 9,
       track_total_hits: true,
       sort: [{ "vulnerability.score.base": { order: "desc", unmapped_type: "float" } }],
       query: { match_all: {} },
@@ -404,8 +404,8 @@ export async function getOpenCtiOverview(): Promise<OpenCtiOverview> {
       ),
       openCtiQuery(
         token,
-        "query PrimeSecThreatActors { threatActors(first: 6) { pageInfo { globalCount } edges { node { id name description } } } }",
-        "query PrimeSecThreatActorsPlain { threatActors(first: 6) { edges { node { id name description } } } }"
+        "query PrimeSecThreatActors { threatActors(first: 9) { pageInfo { globalCount } edges { node { id name description } } } }",
+        "query PrimeSecThreatActorsPlain { threatActors(first: 9) { edges { node { id name description } } } }"
       )
     ]);
     const failures = results.filter((r) => r.status === "rejected");

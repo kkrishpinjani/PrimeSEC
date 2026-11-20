@@ -5,6 +5,7 @@
  */
 import { promises as fs } from "fs";
 import path from "path";
+import { dataPath } from "./dataDir.ts";
 
 export const CRITICALITIES = ["Unknown", "Low", "Medium", "High", "Critical"] as const;
 export const EXPOSURES = ["Unknown", "Internal", "Internet-facing"] as const;
@@ -28,7 +29,7 @@ export class AssetError extends Error {
   }
 }
 
-const storePath = () => path.join(process.cwd(), "data", "vapt-assets.json");
+const storePath = () => dataPath("vapt-assets.json");
 export const hostKey = (host: string) => host.trim().toLowerCase();
 
 let chain: Promise<unknown> = Promise.resolve();

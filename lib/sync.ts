@@ -9,6 +9,7 @@
 import { promises as fs } from "fs";
 import path from "path";
 import { ingestAssets, validateAssetInput, type AssetInput, type IngestResult } from "./inventory.ts";
+import { dataPath } from "./dataDir.ts";
 
 export const SYNC_SOURCES = ["wazuh", "greenbone", "opencti"] as const;
 export type SyncSource = (typeof SYNC_SOURCES)[number];
@@ -54,7 +55,7 @@ export class SyncError extends Error {
 
 /* ------------------------------ storage ------------------------------ */
 
-const storePath = () => path.join(process.cwd(), "data", "sync.json");
+const storePath = () => dataPath("sync.json");
 const EMPTY = (): SyncStore => ({ runs: [], watermarks: [], intel: [] });
 
 export async function readSync(): Promise<SyncStore> {

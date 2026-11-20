@@ -11,6 +11,7 @@
  */
 import { promises as fs } from "fs";
 import path from "path";
+import { dataPath } from "./dataDir.ts";
 
 export const ASSET_FIELDS = ["source", "sourceAssetId", "assetType", "name", "hostname", "primaryIp", "operatingSystem", "environment", "businessUnit", "criticality", "internetFacing", "tags", "identifiers", "vulnerabilities"] as const;
 const VULN_FIELDS = ["cve", "key", "title", "severity", "cvss", "status"] as const;
@@ -206,7 +207,7 @@ export function exposure(asset: Pick<InventoryAsset, "criticality" | "internetFa
 
 /* ------------------------------ storage ------------------------------ */
 
-const storePath = () => path.join(process.cwd(), "data", "inventory.json");
+const storePath = () => dataPath("inventory.json");
 const EMPTY = (): InventoryStore => ({ assets: [], vulns: [], observations: [], aliases: {}, dismissed: [] });
 
 export async function readInventory(): Promise<InventoryStore> {
